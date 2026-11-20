@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Projects OS Settings
+Comment=Customize themes, hotkeys, export paths, and Project Reset
+Exec=/usr/local/bin/projects-settings
+Terminal=false
+Type=Application
+Categories=Settings;System;

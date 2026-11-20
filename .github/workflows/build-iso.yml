@@ -1,0 +1,63 @@
+name: Build & Release Projects OS ISO
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'os/**'
+      - '.github/workflows/build-iso.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/.ghcup
+          sudo docker image prune -af || true
+          df -h
+
+      - name: Build Projects OS ISO in Arch Linux container
+        run: |
+          mkdir -p out
+          docker run --rm --privileged             -v "${{ github.workspace }}:/workspace"             -w /workspace             archlinux:latest             bash /workspace/os/build.sh
+
+      - name: Verify ISO and generate checksums
+        run: |
+          ls -lh out/
+          cd out
+          ISO_FILE=$(ls projects-os-*.iso | head -n 1)
+          mv "$ISO_FILE" projects-os-x86_64.iso
+          sha256sum projects-os-x86_64.iso > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create Release Tag & Publish ISO
+        id: release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}-${{ github.run_id }}
+          name: Projects OS Build #${{ github.run_number }}
+          make_latest: true
+          generate_release_notes: true
+          body: |
+            ## Projects OS (Portable Arch Linux — Hyprland + Niri)
+
+            ### Flash Instructions (Windows + Rufus)
+            1. Download `projects-os-x86_64.iso` below.
+            2. Open **Rufus**, select your **32 GB USB drive**, and choose `projects-os-x86_64.iso`.
+            3. Click **START** and choose **Write in DD Image mode**.
+            4. Boot from USB (Secure Boot disabled). On first boot, a **15 GB `PROJECTS_PERSIST`** partition is created automatically in the remaining free space.
+
+            ### Default Credentials
+            - **User**: `dev`
+            - **Password**: `projects` (also `sudo` password)
+          files: |
+            out/projects-os-x86_64.iso
+            out/SHA256SUMS.txt

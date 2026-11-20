@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs at session start (Hyprland & Niri). Ensures config sync + launches First-Boot Stack Wizard
+# before normal workflow until completed (or after a Project Reset).
+set -euo pipefail
+
+STATE_FILE="$HOME/.local/state/projects-os/wizard-done"
+mkdir -p "$HOME/.local/state/projects-os"
+
+# Always apply current theme/hotkey/export settings on login
+/usr/local/bin/projects-apply-config || true
+
+if [[ ! -f "$STATE_FILE" ]]; then
+  sleep 0.6
+  /usr/local/bin/projects-wizard &
+fi

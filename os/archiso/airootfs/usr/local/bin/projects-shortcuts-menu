@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Searchable Shortcuts Menu (Super + /) powered by Fuzzel
+set -euo pipefail
+
+SHORTCUTS_TXT="$HOME/SHORTCUTS.txt"
+if [[ ! -f "$SHORTCUTS_TXT" ]]; then
+  /usr/local/bin/projects-apply-config >/dev/null 2>&1 || true
+fi
+
+CHOICE=$(grep -E '^\[|  [A-Za-z]' "$SHORTCUTS_TXT" | grep -v '^===' | fuzzel --dmenu --prompt="Shortcuts ❯ " --width=72 --lines=18 || true)
+
+# If the user selects an executable OS action, run it directly!
+if [[ -n "$CHOICE" ]]; then
+  case "$CHOICE" in
+    *"Toggle System Monitor"*)    /usr/local/bin/projects-toggle-sysmon & ;;
+    *"Hide / Restore All"*)       /usr/local/bin/projects-toggle-hide-all & ;;
+    *"Projects OS Settings"*)     /usr/local/bin/projects-settings & ;;
+    *"Project Stack Wizard"*)     /usr/local/bin/projects-wizard & ;;
+    *"Reset Current Project"*)    /usr/local/bin/projects-reset & ;;
+    *"Launch Terminal"*)          foot & ;;
+    *"Launch Minimal Firefox"*)   firefox & ;;
+    *"Launch Neovim"*)            foot -e nvim & ;;
+    *"Launch LocalSend"*)         /usr/local/bin/localsend & ;;
+    *"Launch OBS Studio"*)        obs & ;;
+    *"Application Launcher"*)     fuzzel & ;;
+  esac
+fi

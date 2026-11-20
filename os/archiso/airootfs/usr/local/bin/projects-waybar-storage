@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Outputs available persistent storage (or root fallback) as JSON for Waybar
+if mountpoint -q /persist; then
+  TARGET="/persist"
+  LABEL="USB"
+else
+  TARGET="/"
+  LABEL="RAM"
+fi
+AVAIL=$(df -BG --output=avail "$TARGET" | tail -n 1 | tr -dc '0-9')
+TOTAL=$(df -BG --output=size "$TARGET" | tail -n 1 | tr -dc '0-9')
+USED_PCT=$(df --output=pcent "$TARGET" | tail -n 1 | tr -dc '0-9')
+printf '{"text":"SSD %sG free","tooltip":"%s Persistence: %s GB free of %s GB (%s%% used)"}
+'   "$AVAIL" "$LABEL" "$AVAIL" "$TOTAL" "$USED_PCT"

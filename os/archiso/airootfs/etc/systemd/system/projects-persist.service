@@ -1,0 +1,13 @@
+[Unit]
+Description=Projects OS Automatic 15GB Persistence Partition Setup & Mount
+DefaultDependencies=no
+After=local-fs-pre.target systemd-udev-settle.service systemd-sysusers.service
+Before=local-fs.target NetworkManager.service greetd.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/projects-persist
+
+[Install]
+WantedBy=local-fs.target

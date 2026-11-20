@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Projects OS — Project Reset Only
+# Wipes: ~/Projects, installed mise runtimes, stack pacman packages, LazyVim language extras, Firefox session/cache.
+# Preserves: Wi-Fi connections, ~/.ssh keys, ~/.gitconfig, ~/.config/projects-os (themes, hotkeys, export paths).
+set -euo pipefail
+
+FORCE=0
+if [[ "${1:-}" == "--yes" ]]; then
+  FORCE=1
+fi
+
+if (( FORCE == 0 )); then
+  zenity --question     --title="Projects OS — Project Reset"     --width=480     --text="<b>Reset Current Project Environment?</b>
+
+<b>Will be wiped:</b>
+• Projects folder (~/Projects)
+• Installed language toolchains (Java, Rust, Go, Node, etc.)
+• LazyVim language extras
+• Firefox browsing history &amp; sessions
+
+<b>Will be preserved:</b>
+• Wi-Fi credentials &amp; network profiles
+• SSH keys (~/.ssh) &amp; Git config
+• All OS settings (themes, hotkeys, export paths)"     --ok-label="Reset Project Now"     --cancel-label="Cancel" || exit 0
+fi
+
+notify-send "Projects OS" "Resetting project workspace..." || true
+
+# 1. Read configured projects directory
+PROJECTS_DIR=$(python3 -c 'import json,os; d=json.load(open(os.path.expanduser("~/.config/projects-os/settings.json"))); print(os.path.expanduser(d["paths"]["projects_dir"]))' 2>/dev/null || echo "$HOME/Projects")
+
+# 2. Wipe Projects directory cleanly (recreate empty folder)
+if [[ -d "$PROJECTS_DIR" ]]; then
+  rm -rf "${PROJECTS_DIR:?}"/* "${PROJECTS_DIR:?}"/.[!.]* 2>/dev/null || true
+fi
+mkdir -p "$PROJECTS_DIR"
+
+# 3. Wipe installed mise language runtimes & global tool list
+rm -rf "$HOME/.local/share/mise" "$HOME/.cache/mise" "$HOME/.config/mise/config.toml"
+
+# 4. Remove any project-specific pacman stack packages (e.g. clang/cmake/gdb)
+STACK_FILE="$HOME/.local/state/projects-os/pacman-stacks.list"
+if [[ -f "$STACK_FILE" ]]; then
+  mapfile -t PKGS < "$STACK_FILE"
+  if (( ${#PKGS[@]} > 0 )); then
+    sudo pacman -Rns --noconfirm "${PKGS[@]}" 2>/dev/null || true
+  fi
+  rm -f "$STACK_FILE"
+fi
+
+# 5. Reset LazyVim language extras back to clean base (keeping core Neovim)
+cat > "$HOME/.config/nvim/lazyvim.json" <<'EOF'
+{
+  "extras": [],
+  "version": 7
+}
+EOF
+rm -rf "$HOME/.local/share/nvim/mason"
+
+# 6. Clear Firefox session, cookies, history, cache while preserving minimal userChrome.css
+pkill -x firefox 2>/dev/null || true
+for prof in "$HOME/.mozilla/firefox/"*.projects-minimal; do
+  if [[ -d "$prof" ]]; then
+    find "$prof" -mindepth 1 -maxdepth 1       ! -name "chrome"       ! -name "user.js"       -exec rm -rf {} + 2>/dev/null || true
+  fi
+done
+rm -rf "$HOME/.cache/mozilla"
+
+# 7. Clear wizard-done flag and relaunch First-Boot Stack Picker for the next project
+rm -f "$HOME/.local/state/projects-os/wizard-done"
+notify-send "Project Reset Complete" "Wi-Fi, SSH keys, and OS settings preserved. Starting stack picker..." || true
+exec /usr/local/bin/projects-wizard

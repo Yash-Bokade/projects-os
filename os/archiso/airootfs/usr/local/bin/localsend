@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+if [[ -x /opt/localsend/localsend_app ]]; then
+  exec /opt/localsend/localsend_app "$@"
+else
+  notify-send "LocalSend" "LocalSend binary not found in /opt/localsend. Check release build logs." || true
+  exit 1
+fi

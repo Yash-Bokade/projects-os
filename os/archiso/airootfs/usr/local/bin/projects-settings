@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import gi
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk
+
+HOME = Path.home()
+SETTINGS_FILE = HOME / ".config" / "projects-os" / "settings.json"
+
+THEMES = [
+    ("matte-dark",   "Matte Dark (Default)"),
+    ("carbon-slate", "Carbon Slate"),
+    ("nord-minimal", "Nord Minimal"),
+    ("matte-light",  "Matte Light"),
+]
+
+HOTKEY_LABELS = [
+    ("sysmon",         "Toggle System Monitor (btop)"),
+    ("hide_all",       "Hide / Restore All Windows"),
+    ("shortcuts_menu", "Searchable Shortcuts Menu"),
+    ("settings",       "Projects OS Settings GUI"),
+    ("project_reset",  "Project Reset"),
+    ("terminal",       "Launch Terminal (Foot)"),
+    ("launcher",       "Application Launcher (Fuzzel)"),
+    ("browser",        "Launch Minimal Firefox"),
+    ("neovim",         "Launch Neovim (LazyVim)"),
+    ("localsend",      "Launch LocalSend"),
+    ("obs",            "Launch OBS Studio"),
+    ("close_window",   "Close Focused Window"),
+]
+
+PATH_LABELS = [
+    ("projects_dir",        "Projects Workspace Directory"),
+    ("obs_recordings",      "OBS Recordings Export Path"),
+    ("localsend_downloads", "LocalSend Downloads Path"),
+    ("backup_export",       "Project Archive / Backup Export Path"),
+]
+
+class SettingsApp(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.projectsos.settings")
+        self.settings = self._load_settings()
+        self.hotkey_entries = {}
+        self.path_entries = {}
+
+    def _load_settings(self):
+        if not SETTINGS_FILE.exists():
+            subprocess.run(["/usr/local/bin/projects-apply-config"], check=False)
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+
+    def do_activate(self):
+        win = Gtk.ApplicationWindow(application=self, title="Projects OS Settings")
+        win.set_default_size(740, 560)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        outer.set_margin_top(14)
+        outer.set_margin_bottom(14)
+        outer.set_margin_start(16)
+        outer.set_margin_end(16)
+        win.set_child(outer)
+
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+        outer.append(notebook)
+
+        notebook.append_page(self._build_appearance_tab(), Gtk.Label(label="Themes & UI"))
+        notebook.append_page(self._build_hotkeys_tab(), Gtk.Label(label="Hotkeys"))
+        notebook.append_page(self._build_paths_tab(), Gtk.Label(label="Data Export Paths"))
+        notebook.append_page(self._build_reset_tab(win), Gtk.Label(label="Project Reset & System"))
+
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        footer.set_halign(Gtk.Align.END)
+
+        self.status_lbl = Gtk.Label(label="")
+        self.status_lbl.set_hexpand(True)
+        self.status_lbl.set_xalign(0)
+        footer.append(self.status_lbl)
+
+        save_btn = Gtk.Button(label="Save & Apply Live")
+        save_btn.add_css_class("suggested-action")
+        save_btn.connect("clicked", self.on_save)
+        footer.append(save_btn)
+        outer.append(footer)
+
+        win.present()
+
+    def _build_appearance_tab(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_margin_top(16)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        row1 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row1.append(Gtk.Label(label="Color Theme (Minimalist Solid Matte):"))
+        self.theme_combo = Gtk.ComboBoxText()
+        current_theme = self.settings.get("theme", "matte-dark")
+        for idx, (tid, tname) in enumerate(THEMES):
+            self.theme_combo.append(tid, tname)
+            if tid == current_theme:
+                self.theme_combo.set_active(idx)
+        row1.append(self.theme_combo)
+        box.append(row1)
+
+        row2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row2.append(Gtk.Label(label="UI & Terminal Font Size (px):"))
+        adj = Gtk.Adjustment(value=self.settings.get("font_size", 12), lower=9, upper=20, step_increment=1)
+        self.font_spin = Gtk.SpinButton(adjustment=adj)
+        row2.append(self.font_spin)
+        box.append(row2)
+
+        row3 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row3.append(Gtk.Label(label="Preferred Compositor:"))
+        self.session_combo = Gtk.ComboBoxText()
+        self.session_combo.append("hyprland", "Hyprland (Dynamic Tiling)")
+        self.session_combo.append("niri", "Niri (Scrollable Tiling)")
+        self.session_combo.set_active_id(self.settings.get("default_session", "hyprland"))
+        row3.append(self.session_combo)
+        box.append(row3)
+
+        note = Gtk.Label(
+            label="Note: You can switch between Hyprland and Niri at any login via F2 in greetd (tuigreet).\n"
+                  "All themes avoid wallpaper bloat to keep RAM usage and GPU overhead minimal."
+        )
+        note.set_xalign(0)
+        note.set_wrap(True)
+        box.append(note)
+        return box
+
+    def _build_hotkeys_tab(self):
+        scrolled = Gtk.ScrolledWindow()
+        grid = Gtk.Grid(column_spacing=16, row_spacing=8)
+        grid.set_margin_top(14)
+        grid.set_margin_bottom(14)
+        grid.set_margin_start(16)
+        grid.set_margin_end(16)
+
+        hdr1 = Gtk.Label(label="Action")
+        hdr1.set_xalign(0)
+        hdr2 = Gtk.Label(label="Key (combined with Super)")
+        hdr2.set_xalign(0)
+        grid.attach(hdr1, 0, 0, 1, 1)
+        grid.attach(hdr2, 1, 0, 1, 1)
+
+        hk = self.settings.get("hotkeys", {})
+        for row, (key, label) in enumerate(HOTKEY_LABELS, start=1):
+            lbl = Gtk.Label(label=label)
+            lbl.set_xalign(0)
+            lbl.set_hexpand(True)
+            entry = Gtk.Entry()
+            entry.set_text(hk.get(key, ""))
+            entry.set_width_chars(16)
+            self.hotkey_entries[key] = entry
+            grid.attach(lbl, 0, row, 1, 1)
+            grid.attach(entry, 1, row, 1, 1)
+
+        scrolled.set_child(grid)
+        return scrolled
+
+    def _build_paths_tab(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(16)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        paths = self.settings.get("paths", {})
+        for key, label in PATH_LABELS:
+            lbl = Gtk.Label(label=label)
+            lbl.set_xalign(0)
+            entry = Gtk.Entry()
+            entry.set_text(paths.get(key, ""))
+            entry.set_hexpand(True)
+            self.path_entries[key] = entry
+            box.append(lbl)
+            box.append(entry)
+
+        hint = Gtk.Label(
+            label="Saving automatically updates OBS Studio recording output, LocalSend download target, and ~/SHORTCUTS.txt."
+        )
+        hint.set_xalign(0)
+        hint.set_wrap(True)
+        box.append(hint)
+        return box
+
+    def _build_reset_tab(self, win):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_margin_top(16)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        # Persistence storage info
+        persist_info = subprocess.run(
+            ["df", "-h", "/persist" if os.path.ismount("/persist") else "/"],
+            capture_output=True, text=True
+        ).stdout.strip()
+        storage_lbl = Gtk.Label(label=f"Persistence Storage Status:\n{persist_info}")
+        storage_lbl.set_xalign(0)
+        storage_lbl.set_selectable(True)
+        box.append(storage_lbl)
+
+        wizard_btn = Gtk.Button(label="Open Project Stack Wizard (Install Languages)")
+        wizard_btn.connect("clicked", lambda *_: subprocess.Popen(["/usr/local/bin/projects-wizard"]))
+        box.append(wizard_btn)
+
+        sep = Gtk.Separator()
+        box.append(sep)
+
+        reset_desc = Gtk.Label(
+            label="Project Reset Only:\n"
+                  "• Wipes ~/Projects, installed language toolchains, LazyVim extras, and Firefox session caches.\n"
+                  "• Keeps Wi-Fi profiles, SSH keys (~/.ssh), Git config, and all OS settings (themes, hotkeys, export paths)."
+        )
+        reset_desc.set_xalign(0)
+        reset_desc.set_wrap(True)
+        box.append(reset_desc)
+
+        reset_btn = Gtk.Button(label="Reset Project Environment Now")
+        reset_btn.add_css_class("destructive-action")
+        reset_btn.connect("clicked", lambda *_: subprocess.Popen(["/usr/local/bin/projects-reset"]))
+        box.append(reset_btn)
+        return box
+
+    def on_save(self, _btn):
+        self.settings["theme"] = self.theme_combo.get_active_id() or "matte-dark"
+        self.settings["font_size"] = int(self.font_spin.get_value())
+        self.settings["default_session"] = self.session_combo.get_active_id() or "hyprland"
+
+        for k, entry in self.hotkey_entries.items():
+            val = entry.get_text().strip()
+            if val:
+                self.settings["hotkeys"][k] = val
+
+        for k, entry in self.path_entries.items():
+            val = entry.get_text().strip()
+            if val:
+                self.settings["paths"][k] = val
+
+        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS_FILE.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
+        subprocess.run(["/usr/local/bin/projects-apply-config"], check=False)
+        self.status_lbl.set_text("Saved & applied live to Hyprland, Niri, Waybar, OBS, LocalSend, and ~/SHORTCUTS.txt.")
+
+if __name__ == "__main__":
+    app = SettingsApp()
+    app.run()

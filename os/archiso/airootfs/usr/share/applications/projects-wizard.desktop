@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Project Stack Wizard
+Comment=Connect to Wi-Fi and install dev stacks with LazyVim integration
+Exec=/usr/local/bin/projects-wizard
+Terminal=false
+Type=Application
+Categories=Development;System;

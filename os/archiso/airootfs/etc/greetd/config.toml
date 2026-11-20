@@ -1,0 +1,6 @@
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --remember --remember-user-session --asterisks --greeting 'Projects OS — Press F2 to switch Hyprland / Niri' --sessions /usr/share/wayland-sessions"
+user = "greeter"
