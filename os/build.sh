@@ -84,6 +84,14 @@ cp -a /workspace/os/archiso/airootfs/etc/skel/.config/nvim/. "$PROFILE_DIR/airoo
 echo "==> Pre-seeding initial theme, hotkeys, Niri config, Waybar CSS, and SHORTCUTS.txt via pure Bash..."
 HOME="$PROFILE_DIR/airootfs/etc/skel" bash "$PROFILE_DIR/airootfs/usr/local/bin/projects-apply-config" || true
 
+echo "==> Removing conflicting releng services (tty1 autologin & systemd-networkd)..."
+rm -rf "$PROFILE_DIR/airootfs/etc/systemd/system/getty@tty1.service.d"
+rm -f "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/systemd-networkd.service"
+rm -f "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/systemd-resolved.service"
+rm -f "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/iwd.service"
+rm -f "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/reflector.service"
+rm -f "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/sshd.service"
+
 echo "==> Enabling Projects OS systemd services..."
 mkdir -p "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants"
 mkdir -p "$PROFILE_DIR/airootfs/etc/systemd/system/local-fs.target.wants"
