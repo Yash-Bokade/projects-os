@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Toggle hidden btop System Resources Monitor (Super + S) on both Hyprland & Niri
 set -euo pipefail
 
 APP_ID="projects-sysmon"
-
 if pgrep -f "foot.*--app-id=${APP_ID}" >/dev/null 2>&1; then
   pkill -f "foot.*--app-id=${APP_ID}" || true
   exit 0

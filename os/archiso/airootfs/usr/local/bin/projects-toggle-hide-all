@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Hide all open windows / Show all minimized windows (Super + D)
-# Works seamlessly on both Hyprland and Niri
 set -euo pipefail
 
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/projects-os"
@@ -11,14 +9,12 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   CUR_WS=$(hyprctl activeworkspace -j | jq -r '.id')
 
   if [[ -f "$STATE_FILE" ]] && [[ -s "$STATE_FILE" ]]; then
-    # Restore all previously hidden windows back to active workspace
     while read -r addr; do
       [[ -n "$addr" ]] && hyprctl dispatch movetoworkspacesilent "${CUR_WS},address:${addr}" >/dev/null 2>&1 || true
     done < <(jq -r '.[]' "$STATE_FILE")
     rm -f "$STATE_FILE"
     notify-send -t 1500 "Windows Restored" "All minimized windows are visible again." || true
   else
-    # Hide all windows on the active workspace into special:minimized
     ADDRS=$(hyprctl clients -j | jq -c --argjson ws "$CUR_WS" '[.[] | select(.workspace.id == $ws) | .address]')
     COUNT=$(echo "$ADDRS" | jq 'length')
     if (( COUNT > 0 )); then
@@ -32,7 +28,6 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
 
 elif [[ -n "${NIRI_SOCKET:-}" ]]; then
   STATE_FILE="$STATE_DIR/niri-prev-ws"
-  # Niri scrollable workspace approach: switch to the bottom empty workspace & toggle back
   if [[ -f "$STATE_FILE" ]]; then
     PREV_IDX=$(cat "$STATE_FILE")
     rm -f "$STATE_FILE"

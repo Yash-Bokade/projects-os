@@ -1,4 +1,3 @@
-/* Projects OS Minimal Firefox UI — Compact Chrome, Zero Clutter */
 #titlebar { --tab-min-height: 28px !important; }
 #nav-bar { padding: 1px 4px !important; }
 #PersonalToolbar { visibility: collapse !important; }

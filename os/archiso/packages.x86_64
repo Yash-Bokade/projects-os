@@ -98,14 +98,12 @@ zip
 tar
 p7zip
 
-# Fonts & Minimal GTK4 UI Runtime
+# Fonts & Native GTK4 Runtime (Zero Python!)
 ttf-jetbrains-mono-nerd
 inter-font
 noto-fonts
 gtk3
 gtk4
-python
-python-gobject
 libayatana-appindicator
 libepoxy
 zenity

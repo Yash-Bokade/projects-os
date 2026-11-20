@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Free up runner disk space
         run: |
@@ -24,7 +24,7 @@ jobs:
           sudo docker image prune -af || true
           df -h
 
-      - name: Build Projects OS ISO in Arch Linux container
+      - name: Build Projects OS (Compile C Binaries + Archiso)
         run: |
           mkdir -p out
           docker run --rm --privileged             -v "${{ github.workspace }}:/workspace"             -w /workspace             archlinux:latest             bash /workspace/os/build.sh
@@ -40,20 +40,23 @@ jobs:
 
       - name: Create Release Tag & Publish ISO
         id: release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ github.run_number }}-${{ github.run_id }}
           name: Projects OS Build #${{ github.run_number }}
           make_latest: true
           generate_release_notes: true
           body: |
-            ## Projects OS (Portable Arch Linux — Hyprland + Niri)
+            ## Projects OS (Zero-Python Portable Arch Linux — Hyprland + Niri)
+
+            - **100% Native C (GTK4) + Pure Shell** — Zero Python runtime bloat.
+            - **Auto 15 GB Persistence** on 32 GB USB drives flashed via Rufus (**DD Image mode**).
 
             ### Flash Instructions (Windows + Rufus)
             1. Download `projects-os-x86_64.iso` below.
             2. Open **Rufus**, select your **32 GB USB drive**, and choose `projects-os-x86_64.iso`.
             3. Click **START** and choose **Write in DD Image mode**.
-            4. Boot from USB (Secure Boot disabled). On first boot, a **15 GB `PROJECTS_PERSIST`** partition is created automatically in the remaining free space.
+            4. Boot from USB (Secure Boot disabled).
 
             ### Default Credentials
             - **User**: `dev`

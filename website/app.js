@@ -4,7 +4,7 @@ const SHORTCUTS = [
   { key: "Super + S", action: "Toggle hidden System Resources Monitor (btop)", cat: "System" },
   { key: "Super + D", action: "Hide all open windows / Restore minimized windows", cat: "System" },
   { key: "Super + /", action: "Open searchable Shortcuts menu (Fuzzel)", cat: "System" },
-  { key: "Super + ,", action: "Open Projects OS Settings GUI", cat: "System" },
+  { key: "Super + ,", action: "Open Projects OS Settings GUI (Native C)", cat: "System" },
   { key: "Super + Shift + R", action: "Project Reset (keeps Wi-Fi, SSH, OS settings)", cat: "System" },
   { key: "Super + Return", action: "Launch Terminal (Foot)", cat: "Apps" },
   { key: "Super + Space", action: "Application Launcher (Fuzzel)", cat: "Apps" },
@@ -36,12 +36,11 @@ const VIEWS = {
       </div>
       <div class="win">
         <div class="win-bar"><span>foot — ~/Projects/api</span><span>bash</span></div>
-        <div class="win-body">projects-os api ❯ git status
-On branch main
-nothing to commit, working tree clean
+        <div class="win-body">projects-os api ❯ file /usr/local/bin/projects-settings
+ELF 64-bit LSB pie executable, x86-64, stripped
 
-projects-os api ❯ java --version
-openjdk latest (managed by mise)</div>
+projects-os api ❯ which python
+which: no python in PATH (Zero Python OS!)</div>
       </div>`
   },
   niri: {
@@ -68,35 +67,35 @@ Port 53317</div>
       </div>`
   },
   wizard: {
-    mode: "FIRST-BOOT WIZARD",
+    mode: "FIRST-BOOT WIZARD (C11 ELF)",
     cls: "desktop-canvas",
     html: `
       <div class="win focused" style="max-width: 560px; margin: 0 auto; width: 100%;">
-        <div class="win-bar"><span>Projects OS — First-Boot Project Stack Wizard</span><span>GTK4</span></div>
+        <div class="win-bar"><span>Projects OS — First-Boot Project Stack Wizard</span><span>Native C + GTK4</span></div>
         <div class="win-body">[1] Connectivity: Online (Wi-Fi 6E connected)
 
 [2] Select Language Stacks for this Project:
-  [x] Java (Latest OpenJDK)   [x] Node.js + TypeScript
+  [x] Java (Latest OpenJDK)   [x] C / C++ (Clang+CMake)
   [ ] Rust (Latest)           [ ] Go (Latest)
-  [ ] C / C++ (Clang+CMake)   [ ] Python (Latest)
+  [ ] Node.js + TypeScript    [ ] Zig (Latest)
 
-$ mise use -g java@latest node@latest
+$ mise use -g java@latest
 $ nvim --headless "+Lazy! sync" +qa
 ✓ LazyVim extras & Mason LSPs ready!</div>
       </div>`
   },
   settings: {
-    mode: "SETTINGS GUI",
+    mode: "SETTINGS GUI (C11 ELF)",
     cls: "desktop-canvas",
     html: `
       <div class="win focused" style="max-width: 600px; margin: 0 auto; width: 100%;">
-        <div class="win-bar"><span>Projects OS Settings (Super + ,)</span><span>GTK4</span></div>
+        <div class="win-bar"><span>Projects OS Settings (Super + ,)</span><span>Native C + GTK4</span></div>
         <div class="win-body">Tabs: [Themes & UI]  [Hotkeys]  [Data Export Paths]  [Project Reset]
 
+• Config Backend:  ~/.config/projects-os/settings.conf (GLib GKeyFile + Bash)
 • Theme:           Matte Dark (Zero Wallpaper Bloat)
 • OBS Recordings:  /home/dev/Exports/OBS
-• LocalSend Dir:   /home/dev/Exports/LocalSend
-• Persistence:     /persist (14.1 GB free / 15.0 GB)
+• Persistence:     /persist (14.2 GB free / 15.0 GB)
 
 [ Reset Project Environment ]  (Preserves Wi-Fi, SSH keys & Settings)</div>
       </div>`

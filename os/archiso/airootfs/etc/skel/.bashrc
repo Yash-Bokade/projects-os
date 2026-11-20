@@ -1,4 +1,3 @@
-# Projects OS minimal shell config
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 export EDITOR="nvim"
 export VISUAL="nvim"

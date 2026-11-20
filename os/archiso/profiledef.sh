@@ -4,7 +4,7 @@
 iso_name="projects-os"
 iso_label="PROJECTS_OS"
 iso_publisher="Projects OS <https://github.com>"
-iso_application="Projects OS Portable Arch Linux (Hyprland + Niri)"
+iso_application="Projects OS Portable Arch Linux (Hyprland + Niri, Native C + Shell)"
 iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
 install_dir="arch"
 buildmodes=('iso')

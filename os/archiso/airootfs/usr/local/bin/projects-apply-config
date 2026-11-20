@@ -1,138 +1,151 @@
-#!/usr/bin/env python3
-import json
-import os
-import subprocess
-from pathlib import Path
+#!/usr/bin/env bash
+# Projects OS — Unified Config Sync Engine (100% Pure Bash + jq — Zero Python)
+set -euo pipefail
 
-HOME = Path.home()
-CFG_DIR = HOME / ".config" / "projects-os"
-SETTINGS_FILE = CFG_DIR / "settings.json"
+CFG_DIR="$HOME/.config/projects-os"
+CONF_FILE="$CFG_DIR/settings.conf"
+mkdir -p "$CFG_DIR"
 
-THEMES = {
-    "matte-dark": {
-        "name": "Matte Dark (Default)",
-        "bg": "#0e1014",
-        "surface": "#161920",
-        "border": "#2a303c",
-        "accent": "#6ea8fe",
-        "fg": "#e6edf3",
-        "muted": "#8b949e",
-        "danger": "#f85149",
-    },
-    "carbon-slate": {
-        "name": "Carbon Slate",
-        "bg": "#121212",
-        "surface": "#1c1c1e",
-        "border": "#333336",
-        "accent": "#34d399",
-        "fg": "#f3f4f6",
-        "muted": "#9ca3af",
-        "danger": "#ef4444",
-    },
-    "nord-minimal": {
-        "name": "Nord Minimal",
-        "bg": "#1f2430",
-        "surface": "#282e3c",
-        "border": "#3b4252",
-        "accent": "#88c0d0",
-        "fg": "#eceff4",
-        "muted": "#9aa5b1",
-        "danger": "#bf616a",
-    },
-    "matte-light": {
-        "name": "Matte Light",
-        "bg": "#f4f5f7",
-        "surface": "#ffffff",
-        "border": "#d0d7de",
-        "accent": "#0969da",
-        "fg": "#1f2328",
-        "muted": "#59636e",
-        "danger": "#cf222e",
-    },
+if [[ ! -f "$CONF_FILE" ]]; then
+  cat > "$CONF_FILE" <<EOF
+[general]
+theme=matte-dark
+font_size=12
+default_session=hyprland
+
+[paths]
+projects_dir=$HOME/Projects
+obs_recordings=$HOME/Exports/OBS
+localsend_downloads=$HOME/Exports/LocalSend
+backup_export=$HOME/Exports/Backups
+
+[hotkeys]
+terminal=Return
+launcher=Space
+browser=B
+neovim=N
+sysmon=S
+hide_all=D
+shortcuts_menu=Slash
+settings=Comma
+localsend=L
+obs=O
+close_window=Q
+project_reset=Shift+R
+EOF
+fi
+
+ini_get() {
+  local sec="$1" key="$2" def="$3" val
+  val=$(awk -F'=' -v s="[$sec]" -v k="$key" '
+    $0 == s { in_s = 1; next }
+    /^\[/ { in_s = 0 }
+    in_s && $1 == k { sub(/^[^=]*=/, ""); print; exit }
+  ' "$CONF_FILE" 2>/dev/null || true)
+  if [[ -n "$val" ]]; then
+    printf '%s' "$val"
+  else
+    printf '%s' "$def"
+  fi
 }
 
-DEFAULT_SETTINGS = {
-    "theme": "matte-dark",
-    "font_size": 12,
-    "default_session": "hyprland",
-    "paths": {
-        "projects_dir": str(HOME / "Projects"),
-        "obs_recordings": str(HOME / "Exports" / "OBS"),
-        "localsend_downloads": str(HOME / "Exports" / "LocalSend"),
-        "backup_export": str(HOME / "Exports" / "Backups"),
-    },
-    "hotkeys": {
-        "terminal": "Return",
-        "launcher": "Space",
-        "browser": "B",
-        "neovim": "N",
-        "sysmon": "S",
-        "hide_all": "D",
-        "shortcuts_menu": "Slash",
-        "settings": "Comma",
-        "localsend": "L",
-        "obs": "O",
-        "close_window": "Q",
-        "project_reset": "Shift+R",
-    },
+expand_tilde() {
+  local p="$1"
+  printf '%s' "${p/#\~/$HOME}"
 }
 
-def load_settings():
-    CFG_DIR.mkdir(parents=True, exist_ok=True)
-    if not SETTINGS_FILE.exists():
-        SETTINGS_FILE.write_text(json.dumps(DEFAULT_SETTINGS, indent=2), encoding="utf-8")
-        return DEFAULT_SETTINGS
-    data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
-    # Merge missing defaults cleanly
-    merged = json.loads(json.dumps(DEFAULT_SETTINGS))
-    merged.update({k: v for k, v in data.items() if k not in ("paths", "hotkeys")})
-    merged["paths"].update(data.get("paths", {}))
-    merged["hotkeys"].update(data.get("hotkeys", {}))
-    return merged
+THEME=$(ini_get general theme "matte-dark")
+FONT_SIZE=$(ini_get general font_size "12")
 
-def parse_hypr_bind(key_spec: str):
-    if "+" in key_spec:
-        parts = key_spec.split("+")
-        mods = " ".join(["$mainMod"] + [p.upper() for p in parts[:-1]])
-        key = parts[-1]
-    else:
-        mods = "$mainMod"
-        key = key_spec
-    key_map = {"Space": "space", "Slash": "slash", "Comma": "comma", "Return": "Return"}
-    return mods, key_map.get(key, key)
+PROJECTS_DIR=$(expand_tilde "$(ini_get paths projects_dir "$HOME/Projects")")
+OBS_DIR=$(expand_tilde "$(ini_get paths obs_recordings "$HOME/Exports/OBS")")
+LOCALSEND_DIR=$(expand_tilde "$(ini_get paths localsend_downloads "$HOME/Exports/LocalSend")")
+BACKUP_DIR=$(expand_tilde "$(ini_get paths backup_export "$HOME/Exports/Backups")")
 
-def parse_niri_bind(key_spec: str):
-    key_map = {"Slash": "Slash", "Comma": "Comma", "Space": "Space", "Return": "Return"}
-    if "+" in key_spec:
-        parts = key_spec.split("+")
-        mods = "+".join(["Mod"] + parts[:-1])
-        key = key_map.get(parts[-1], parts[-1])
-        return f"{mods}+{key}"
-    return f"Mod+{key_map.get(key_spec, key_spec)}"
+HK_TERM=$(ini_get hotkeys terminal "Return")
+HK_LAUNCH=$(ini_get hotkeys launcher "Space")
+HK_BROWSER=$(ini_get hotkeys browser "B")
+HK_NVIM=$(ini_get hotkeys neovim "N")
+HK_SYSMON=$(ini_get hotkeys sysmon "S")
+HK_HIDE=$(ini_get hotkeys hide_all "D")
+HK_MENU=$(ini_get hotkeys shortcuts_menu "Slash")
+HK_SETTINGS=$(ini_get hotkeys settings "Comma")
+HK_LS=$(ini_get hotkeys localsend "L")
+HK_OBS=$(ini_get hotkeys obs "O")
+HK_CLOSE=$(ini_get hotkeys close_window "Q")
+HK_RESET=$(ini_get hotkeys project_reset "Shift+R")
 
-def generate_shortcuts_txt(settings):
-    hk = settings["hotkeys"]
-    txt = f"""========================================================================
+case "$THEME" in
+  carbon-slate)
+    BG="#121212"; SURFACE="#1c1c1e"; BORDER="#333336"
+    ACCENT="#34d399"; FG="#f3f4f6"; DANGER="#ef4444"
+    ;;
+  nord-minimal)
+    BG="#1f2430"; SURFACE="#282e3c"; BORDER="#3b4252"
+    ACCENT="#88c0d0"; FG="#eceff4"; DANGER="#bf616a"
+    ;;
+  matte-light)
+    BG="#f4f5f7"; SURFACE="#ffffff"; BORDER="#d0d7de"
+    ACCENT="#0969da"; FG="#1f2328"; DANGER="#cf222e"
+    ;;
+  *)
+    BG="#0e1014"; SURFACE="#161920"; BORDER="#2a303c"
+    ACCENT="#6ea8fe"; FG="#e6edf3"; DANGER="#f85149"
+    ;;
+esac
+
+BG_HEX="${BG#\#}"
+SURFACE_HEX="${SURFACE#\#}"
+BORDER_HEX="${BORDER#\#}"
+ACCENT_HEX="${ACCENT#\#}"
+FG_HEX="${FG#\#}"
+
+hypr_bind_line() {
+  local spec="$1" action="$2" mods='$mainMod'
+  local key="$spec"
+  if [[ "$spec" == *"+"* ]]; then
+    key="${spec##*+}"
+    local prefix="${spec%+*}"
+    local up_mods="${prefix//+/ }"
+    mods="\$mainMod ${up_mods^^}"
+  fi
+  case "$key" in
+    Space)  key="space" ;;
+    Slash)  key="slash" ;;
+    Comma)  key="comma" ;;
+    Return) key="Return" ;;
+  esac
+  printf 'bind = %s, %s, %s\n' "$mods" "$key" "$action"
+}
+
+niri_key() {
+  local spec="$1"
+  printf 'Mod+%s' "$spec"
+}
+
+# 1. Generate ~/SHORTCUTS.txt
+cat > "$HOME/SHORTCUTS.txt" <<EOF
+========================================================================
                        PROJECTS OS — SHORTCUTS GUIDE
-        (Press Super + {hk['shortcuts_menu']} anytime for the interactive searchable menu)
+        (Press Super + ${HK_MENU} anytime for the interactive searchable menu)
 ========================================================================
 
 [ SYSTEM & PERFORMANCE ]
-  Super + {hk['sysmon']:<12}  Toggle System Monitor (btop — hidden by default)
-  Super + {hk['hide_all']:<12}  Hide / Restore All Open Windows
-  Super + {hk['shortcuts_menu']:<12}  Open Searchable Shortcuts Menu
-  Super + {hk['settings']:<12}  Open Projects OS Settings GUI
-  Super + {hk['project_reset']:<12}  Reset Current Project (keeps Wi-Fi, SSH, Settings)
-  Super + {hk['close_window']:<12}  Close Focused Window
+  Super + $(printf '%-12s' "$HK_SYSMON")  Toggle System Monitor (btop — hidden by default)
+  Super + $(printf '%-12s' "$HK_HIDE")  Hide / Restore All Open Windows
+  Super + $(printf '%-12s' "$HK_MENU")  Open Searchable Shortcuts Menu
+  Super + $(printf '%-12s' "$HK_SETTINGS")  Open Projects OS Settings GUI
+  Super + $(printf '%-12s' "$HK_RESET")  Reset Current Project (keeps Wi-Fi, SSH, Settings)
+  Super + $(printf '%-12s' "$HK_CLOSE")  Close Focused Window
   Super + M             Exit Session (Return to Hyprland / Niri Switcher)
 
 [ CORE APPLICATIONS ]
-  Super + {hk['terminal']:<12}  Launch Terminal (Foot)
-  Super + {hk['launcher']:<12}  Open Application Launcher (Fuzzel)
-  Super + {hk['browser']:<12}  Launch Minimal Firefox
-  Super + {hk['neovim']:<12}  Launch Neovim (LazyVim)
-  Super + {hk['localsend']:<12}  Launch LocalSend (LAN File Sharing)
-  Super + {hk['obs']:<12}  Launch OBS Studio
+  Super + $(printf '%-12s' "$HK_TERM")  Launch Terminal (Foot)
+  Super + $(printf '%-12s' "$HK_LAUNCH")  Open Application Launcher (Fuzzel)
+  Super + $(printf '%-12s' "$HK_BROWSER")  Launch Minimal Firefox
+  Super + $(printf '%-12s' "$HK_NVIM")  Launch Neovim (LazyVim)
+  Super + $(printf '%-12s' "$HK_LS")  Launch LocalSend (LAN File Sharing)
+  Super + $(printf '%-12s' "$HK_OBS")  Launch OBS Studio
 
 [ WORKSPACES & NAVIGATION (Hyprland & Niri) ]
   Super + 1..6          Switch Workspace 1-6
@@ -158,87 +171,76 @@ def generate_shortcuts_txt(settings):
   Space + q + q         Quit Neovim
 
 [ DATA EXPORT PATHS ]
-  Projects Directory:   {settings['paths']['projects_dir']}
-  OBS Recordings:       {settings['paths']['obs_recordings']}
-  LocalSend Downloads:  {settings['paths']['localsend_downloads']}
-  Backup Export Path:   {settings['paths']['backup_export']}
-"""
-    (HOME / "SHORTCUTS.txt").write_text(txt.lstrip("\n"), encoding="utf-8")
+  Projects Directory:   ${PROJECTS_DIR}
+  OBS Recordings:       ${OBS_DIR}
+  LocalSend Downloads:  ${LOCALSEND_DIR}
+  Backup Export Path:   ${BACKUP_DIR}
+EOF
 
-def write_hyprland_dynamic(settings, theme):
-    hypr_dir = HOME / ".config" / "hypr"
-    hypr_dir.mkdir(parents=True, exist_ok=True)
-    hk = settings["hotkeys"]
-    bg_hex = theme["bg"].lstrip("#")
-    accent_hex = theme["accent"].lstrip("#")
-    border_hex = theme["border"].lstrip("#")
-
-    theme_conf = f"""# Auto-generated by Projects OS Settings
-general {{
-    col.active_border = rgb({accent_hex})
-    col.inactive_border = rgb({border_hex})
-}}
-misc {{
-    background_color = rgb({bg_hex})
+# 2. Generate Hyprland dynamic theme & keybinds
+mkdir -p "$HOME/.config/hypr"
+cat > "$HOME/.config/hypr/theme.conf" <<EOF
+# Auto-generated by Projects OS Settings (Pure Bash)
+general {
+    col.active_border = rgb(${ACCENT_HEX})
+    col.inactive_border = rgb(${BORDER_HEX})
+}
+misc {
+    background_color = rgb(${BG_HEX})
     disable_hyprland_logo = true
     disable_splash_rendering = true
-}}
-"""
-    (hypr_dir / "theme.conf").write_text(theme_conf, encoding="utf-8")
+}
+EOF
 
-    binds = [
-        ("terminal", "exec, foot"),
-        ("launcher", "exec, fuzzel"),
-        ("browser", "exec, firefox"),
-        ("neovim", "exec, foot -e nvim"),
-        ("sysmon", "exec, /usr/local/bin/projects-toggle-sysmon"),
-        ("hide_all", "exec, /usr/local/bin/projects-toggle-hide-all"),
-        ("shortcuts_menu", "exec, /usr/local/bin/projects-shortcuts-menu"),
-        ("settings", "exec, /usr/local/bin/projects-settings"),
-        ("localsend", "exec, /usr/local/bin/localsend"),
-        ("obs", "exec, obs"),
-        ("close_window", "killactive,"),
-        ("project_reset", "exec, /usr/local/bin/projects-reset"),
-    ]
-    lines = ["# Auto-generated by Projects OS Settings", "$mainMod = SUPER"]
-    for name, action in binds:
-        mods, key = parse_hypr_bind(hk[name])
-        lines.append(f"bind = {mods}, {key}, {action}")
-    (hypr_dir / "keybinds.conf").write_text("\n".join(lines) + "\n", encoding="utf-8")
+{
+  echo "# Auto-generated by Projects OS Settings (Pure Bash)"
+  echo '$mainMod = SUPER'
+  hypr_bind_line "$HK_TERM"     "exec, foot"
+  hypr_bind_line "$HK_LAUNCH"   "exec, fuzzel"
+  hypr_bind_line "$HK_BROWSER"  "exec, firefox"
+  hypr_bind_line "$HK_NVIM"     "exec, foot -e nvim"
+  hypr_bind_line "$HK_SYSMON"   "exec, /usr/local/bin/projects-toggle-sysmon"
+  hypr_bind_line "$HK_HIDE"     "exec, /usr/local/bin/projects-toggle-hide-all"
+  hypr_bind_line "$HK_MENU"     "exec, /usr/local/bin/projects-shortcuts-menu"
+  hypr_bind_line "$HK_SETTINGS" "exec, /usr/local/bin/projects-settings"
+  hypr_bind_line "$HK_LS"       "exec, /usr/local/bin/localsend"
+  hypr_bind_line "$HK_OBS"      "exec, obs"
+  hypr_bind_line "$HK_CLOSE"    "killactive,"
+  hypr_bind_line "$HK_RESET"    "exec, /usr/local/bin/projects-reset"
+} > "$HOME/.config/hypr/keybinds.conf"
 
-def write_niri_config(settings, theme):
-    niri_dir = HOME / ".config" / "niri"
-    niri_dir.mkdir(parents=True, exist_ok=True)
-    hk = settings["hotkeys"]
-    cfg = f"""// Auto-generated by Projects OS Settings (Niri)
-input {{
-    keyboard {{
-        xkb {{
+# 3. Generate Niri config.kdl
+mkdir -p "$HOME/.config/niri"
+cat > "$HOME/.config/niri/config.kdl" <<EOF
+// Auto-generated by Projects OS Settings (Niri)
+input {
+    keyboard {
+        xkb {
             layout "us"
-        }}
-    }}
-    touchpad {{
+        }
+    }
+    touchpad {
         tap
         natural-scroll
         dwt
-    }}
-}}
+    }
+}
 
-layout {{
+layout {
     gaps 8
     center-focused-column "never"
-    preset-column-widths {{
+    preset-column-widths {
         proportion 0.5
         proportion 0.66667
         proportion 1.0
-    }}
-    focus-ring {{
+    }
+    focus-ring {
         width 2
-        active-color "{theme['accent']}"
-        inactive-color "{theme['border']}"
-    }}
-    background-color "{theme['bg']}"
-}}
+        active-color "${ACCENT}"
+        inactive-color "${BORDER}"
+    }
+    background-color "${BG}"
+}
 
 prefer-no-csd
 
@@ -247,140 +249,132 @@ spawn-at-startup "mako"
 spawn-at-startup "xwayland-satellite"
 spawn-at-startup "/usr/local/bin/projects-firstboot-hook"
 
-environment {{
+environment {
     DISPLAY ":0"
     MOZ_ENABLE_WAYLAND "1"
     QT_QPA_PLATFORM "wayland"
-}}
+}
 
-window-rule {{
+window-rule {
     match app-id="^projects-sysmon$"
     open-floating true
-    default-column-width {{ proportion 0.78; }}
-    default-window-height {{ proportion 0.75; }}
-}}
+    default-column-width { proportion 0.78; }
+    default-window-height { proportion 0.75; }
+}
 
-window-rule {{
-    match app-id="^org\.projectsos\.(settings|wizard)$"
+window-rule {
+    match app-id="^org\\.projectsos\\.(settings|wizard)$"
     open-floating true
-}}
+}
 
-binds {{
-    {parse_niri_bind(hk['terminal'])} {{ spawn "foot"; }}
-    {parse_niri_bind(hk['launcher'])} {{ spawn "fuzzel"; }}
-    {parse_niri_bind(hk['browser'])} {{ spawn "firefox"; }}
-    {parse_niri_bind(hk['neovim'])} {{ spawn "foot" "-e" "nvim"; }}
-    {parse_niri_bind(hk['sysmon'])} {{ spawn "/usr/local/bin/projects-toggle-sysmon"; }}
-    {parse_niri_bind(hk['hide_all'])} {{ spawn "/usr/local/bin/projects-toggle-hide-all"; }}
-    {parse_niri_bind(hk['shortcuts_menu'])} {{ spawn "/usr/local/bin/projects-shortcuts-menu"; }}
-    {parse_niri_bind(hk['settings'])} {{ spawn "/usr/local/bin/projects-settings"; }}
-    {parse_niri_bind(hk['localsend'])} {{ spawn "/usr/local/bin/localsend"; }}
-    {parse_niri_bind(hk['obs'])} {{ spawn "obs"; }}
-    {parse_niri_bind(hk['project_reset'])} {{ spawn "/usr/local/bin/projects-reset"; }}
-    {parse_niri_bind(hk['close_window'])} {{ close-window; }}
+binds {
+    $(niri_key "$HK_TERM") { spawn "foot"; }
+    $(niri_key "$HK_LAUNCH") { spawn "fuzzel"; }
+    $(niri_key "$HK_BROWSER") { spawn "firefox"; }
+    $(niri_key "$HK_NVIM") { spawn "foot" "-e" "nvim"; }
+    $(niri_key "$HK_SYSMON") { spawn "/usr/local/bin/projects-toggle-sysmon"; }
+    $(niri_key "$HK_HIDE") { spawn "/usr/local/bin/projects-toggle-hide-all"; }
+    $(niri_key "$HK_MENU") { spawn "/usr/local/bin/projects-shortcuts-menu"; }
+    $(niri_key "$HK_SETTINGS") { spawn "/usr/local/bin/projects-settings"; }
+    $(niri_key "$HK_LS") { spawn "/usr/local/bin/localsend"; }
+    $(niri_key "$HK_OBS") { spawn "obs"; }
+    $(niri_key "$HK_RESET") { spawn "/usr/local/bin/projects-reset"; }
+    $(niri_key "$HK_CLOSE") { close-window; }
 
-    Mod+H {{ focus-column-left; }}
-    Mod+L {{ focus-column-right; }}
-    Mod+J {{ focus-window-down; }}
-    Mod+K {{ focus-window-up; }}
-    Mod+Left {{ focus-column-left; }}
-    Mod+Right {{ focus-column-right; }}
-    Mod+Down {{ focus-window-down; }}
-    Mod+Up {{ focus-window-up; }}
+    Mod+H { focus-column-left; }
+    Mod+L { focus-column-right; }
+    Mod+J { focus-window-down; }
+    Mod+K { focus-window-up; }
+    Mod+Left { focus-column-left; }
+    Mod+Right { focus-column-right; }
+    Mod+Down { focus-window-down; }
+    Mod+Up { focus-window-up; }
 
-    Mod+F {{ maximize-column; }}
-    Mod+V {{ switch-preset-column-width; }}
-    Mod+M {{ quit; }}
+    Mod+F { maximize-column; }
+    Mod+V { switch-preset-column-width; }
+    Mod+M { quit; }
 
-    Mod+1 {{ focus-workspace 1; }}
-    Mod+2 {{ focus-workspace 2; }}
-    Mod+3 {{ focus-workspace 3; }}
-    Mod+4 {{ focus-workspace 4; }}
-    Mod+5 {{ focus-workspace 5; }}
-    Mod+6 {{ focus-workspace 6; }}
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
 
-    Mod+Shift+1 {{ move-column-to-workspace 1; }}
-    Mod+Shift+2 {{ move-column-to-workspace 2; }}
-    Mod+Shift+3 {{ move-column-to-workspace 3; }}
-    Mod+Shift+4 {{ move-column-to-workspace 4; }}
-    Mod+Shift+5 {{ move-column-to-workspace 5; }}
-    Mod+Shift+6 {{ move-column-to-workspace 6; }}
+    Mod+Shift+1 { move-column-to-workspace 1; }
+    Mod+Shift+2 { move-column-to-workspace 2; }
+    Mod+Shift+3 { move-column-to-workspace 3; }
+    Mod+Shift+4 { move-column-to-workspace 4; }
+    Mod+Shift+5 { move-column-to-workspace 5; }
+    Mod+Shift+6 { move-column-to-workspace 6; }
 
-    Print {{ screenshot; }}
-    XF86AudioRaiseVolume allow-when-locked=true {{ spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }}
-    XF86AudioLowerVolume allow-when-locked=true {{ spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }}
-    XF86AudioMute allow-when-locked=true {{ spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }}
-    XF86MonBrightnessUp allow-when-locked=true {{ spawn "brightnessctl" "set" "5%+"; }}
-    XF86MonBrightnessDown allow-when-locked=true {{ spawn "brightnessctl" "set" "5%-"; }}
-}}
-"""
-    (niri_dir / "config.kdl").write_text(cfg, encoding="utf-8")
+    Print { screenshot; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86MonBrightnessUp allow-when-locked=true { spawn "brightnessctl" "set" "5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "set" "5%-"; }
+}
+EOF
 
-def write_waybar_style(settings, theme):
-    wb_dir = HOME / ".config" / "waybar"
-    wb_dir.mkdir(parents=True, exist_ok=True)
-    fs = settings.get("font_size", 12)
-    css = f"""* {{
+# 4. Generate Waybar style.css
+mkdir -p "$HOME/.config/waybar"
+cat > "$HOME/.config/waybar/style.css" <<EOF
+* {
   font-family: "JetBrainsMono Nerd Font", "Inter", monospace;
-  font-size: {fs}px;
+  font-size: ${FONT_SIZE}px;
   border: none;
   border-radius: 0;
   min-height: 0;
-}}
+}
 
-window#waybar {{
-  background-color: {theme['surface']};
-  color: {theme['fg']};
-  border-bottom: 1px solid {theme['border']};
-}}
+window#waybar {
+  background-color: ${SURFACE};
+  color: ${FG};
+  border-bottom: 1px solid ${BORDER};
+}
 
 #workspaces button, #custom-session, #cpu, #memory, #custom-storage,
-#network, #battery, #clock, #custom-settings, #custom-reset {{
+#network, #battery, #clock, #custom-settings, #custom-reset {
   padding: 2px 10px;
-  color: {theme['fg']};
-}}
+  color: ${FG};
+}
 
-#workspaces button.active, #workspaces button.focused {{
-  color: {theme['accent']};
-  border-bottom: 2px solid {theme['accent']};
-}}
+#workspaces button.active, #workspaces button.focused {
+  color: ${ACCENT};
+  border-bottom: 2px solid ${ACCENT};
+}
 
-#cpu, #memory, #custom-storage {{
-  color: {theme['accent']};
+#cpu, #memory, #custom-storage {
+  color: ${ACCENT};
   font-weight: 600;
-}}
+}
 
-#custom-reset {{
-  color: {theme['danger']};
+#custom-reset {
+  color: ${DANGER};
   font-weight: 600;
-}}
+}
 
-#custom-settings:hover, #custom-reset:hover {{
-  background-color: {theme['border']};
-}}
-"""
-    (wb_dir / "style.css").write_text(css, encoding="utf-8")
+#custom-settings:hover, #custom-reset:hover {
+  background-color: ${BORDER};
+}
+EOF
 
-def write_foot_and_fuzzel(settings, theme):
-    foot_dir = HOME / ".config" / "foot"
-    foot_dir.mkdir(parents=True, exist_ok=True)
-    fs = settings.get("font_size", 12)
-    bg = theme["bg"].lstrip("#")
-    fg = theme["fg"].lstrip("#")
-    foot_ini = f"""[main]
-font=JetBrainsMono Nerd Font:size={fs}
+# 5. Generate Foot & Fuzzel configs
+mkdir -p "$HOME/.config/foot" "$HOME/.config/fuzzel"
+cat > "$HOME/.config/foot/foot.ini" <<EOF
+[main]
+font=JetBrainsMono Nerd Font:size=${FONT_SIZE}
 pad=10x10
 
 [colors]
-background={bg}
-foreground={fg}
-"""
-    (foot_dir / "foot.ini").write_text(foot_ini, encoding="utf-8")
+background=${BG_HEX}
+foreground=${FG_HEX}
+EOF
 
-    fuzz_dir = HOME / ".config" / "fuzzel"
-    fuzz_dir.mkdir(parents=True, exist_ok=True)
-    fuzz_ini = f"""[main]
-font=JetBrainsMono Nerd Font:size={fs}
+cat > "$HOME/.config/fuzzel/fuzzel.ini" <<EOF
+[main]
+font=JetBrainsMono Nerd Font:size=${FONT_SIZE}
 prompt="❯ "
 width=45
 lines=12
@@ -388,71 +382,55 @@ horizontal-pad=16
 vertical-pad=12
 
 [colors]
-background={theme['surface'].lstrip('#')}ff
-text={theme['fg'].lstrip('#')}ff
-match={theme['accent'].lstrip('#')}ff
-selection={theme['border'].lstrip('#')}ff
-selection-text={theme['fg'].lstrip('#')}ff
-border={theme['accent'].lstrip('#')}ff
+background=${SURFACE_HEX}ff
+text=${FG_HEX}ff
+match=${ACCENT_HEX}ff
+selection=${BORDER_HEX}ff
+selection-text=${FG_HEX}ff
+border=${ACCENT_HEX}ff
 
 [border]
 width=2
 radius=6
-"""
-    (fuzz_dir / "fuzzel.ini").write_text(fuzz_ini, encoding="utf-8")
+EOF
 
-def sync_export_paths(settings):
-    paths = settings["paths"]
-    for p in paths.values():
-        Path(os.path.expanduser(p)).mkdir(parents=True, exist_ok=True)
+# 6. Sync Data Export Paths (OBS + LocalSend)
+mkdir -p "$PROJECTS_DIR" "$OBS_DIR" "$LOCALSEND_DIR" "$BACKUP_DIR"
 
-    # Sync OBS default recording path
-    obs_profile = HOME / ".config" / "obs-studio" / "basic" / "profiles" / "ProjectsOS"
-    obs_profile.mkdir(parents=True, exist_ok=True)
-    obs_ini = obs_profile / "basic.ini"
-    obs_content = f"""[General]
+OBS_PROF="$HOME/.config/obs-studio/basic/profiles/ProjectsOS"
+mkdir -p "$OBS_PROF"
+cat > "$OBS_PROF/basic.ini" <<EOF
+[General]
 Name=ProjectsOS
 
 [SimpleOutput]
-FilePath={os.path.expanduser(paths['obs_recordings'])}
+FilePath=${OBS_DIR}
 RecFormat2=mkv
 VBitrate=4500
 
 [AdvOut]
-RecFilePath={os.path.expanduser(paths['obs_recordings'])}
-"""
-    obs_ini.write_text(obs_content, encoding="utf-8")
+RecFilePath=${OBS_DIR}
+EOF
 
-    # Sync LocalSend download destination
-    ls_dir = HOME / ".local" / "share" / "org.localsend.localsend_app"
-    ls_dir.mkdir(parents=True, exist_ok=True)
-    ls_prefs_file = ls_dir / "shared_preferences.json"
-    prefs = {}
-    if ls_prefs_file.exists():
-        try:
-            prefs = json.loads(ls_prefs_file.read_text(encoding="utf-8"))
-        except Exception:
-            prefs = {}
-    prefs["flutter.ls_destination"] = os.path.expanduser(paths["localsend_downloads"])
-    ls_prefs_file.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+LS_DIR="$HOME/.local/share/org.localsend.localsend_app"
+LS_PREFS="$LS_DIR/shared_preferences.json"
+mkdir -p "$LS_DIR"
+if command -v jq >/dev/null 2>&1; then
+  if [[ -s "$LS_PREFS" ]] && jq empty "$LS_PREFS" >/dev/null 2>&1; then
+    jq --arg dest "$LOCALSEND_DIR" '.["flutter.ls_destination"] = $dest' "$LS_PREFS" > "$LS_PREFS.tmp"
+    mv "$LS_PREFS.tmp" "$LS_PREFS"
+  else
+    jq -n --arg dest "$LOCALSEND_DIR" '{"flutter.ls_destination": $dest}' > "$LS_PREFS"
+  fi
+else
+  ESCAPED_DIR="${LOCALSEND_DIR//\"/\\\"}"
+  printf '{"flutter.ls_destination":"%s"}\n' "$ESCAPED_DIR" > "$LS_PREFS"
+fi
 
-def reload_live_components():
-    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
-        subprocess.run(["hyprctl", "reload"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # Restart waybar cleanly if running
-    if subprocess.run(["pgrep", "-x", "waybar"], stdout=subprocess.DEVNULL).returncode == 0:
-        subprocess.run(["pkill", "-SIGUSR2", "waybar"], check=False)
-
-def main():
-    settings = load_settings()
-    theme = THEMES.get(settings.get("theme", "matte-dark"), THEMES["matte-dark"])
-    generate_shortcuts_txt(settings)
-    write_hyprland_dynamic(settings, theme)
-    write_niri_config(settings, theme)
-    write_waybar_style(settings, theme)
-    write_foot_and_fuzzel(settings, theme)
-    sync_export_paths(settings)
-    reload_live_components()
-
-if __name__ == "__main__":
-    main()
+# 7. Reload live Wayland session components if active
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  hyprctl reload >/dev/null 2>&1 || true
+fi
+if pgrep -x waybar >/dev/null 2>&1; then
+  pkill -SIGUSR2 waybar || true
+fi

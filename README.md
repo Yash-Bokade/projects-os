@@ -1,21 +1,21 @@
-# Projects OS
+# Projects OS (Zero-Python — Pure C + Shell Edition)
 
-A minimalist, high-performance portable Arch Linux live OS built for a **32 GB USB flash drive (27.25 GB usable)** with automatic **15 GB persistence**, dual Wayland compositors (**Hyprland + Niri**), a **First-Boot Project Stack Wizard**, **GTK4 Settings GUI**, and one-click **Project Reset**.
+A minimalist, ultra-fast portable Arch Linux live OS built for a **32 GB USB flash drive (27.25 GB usable)** with **zero Python runtime**, **native compiled C (GTK4) ELF binaries**, **pure Bash + `jq` system tooling**, automatic **15 GB persistence**, dual Wayland compositors (**Hyprland + Niri**), **LazyVim**, and one-click **Project Reset**.
 
 ---
 
-## Key Features
+## Architecture Highlights (0% Python)
 
-- **Dual Compositors with Session Switcher**: Boot into either **Hyprland** or **Niri** via `greetd` + `tuigreet`.
-- **Zero-Config 15 GB Persistence (Rufus Compatible)**: Flash the `.iso` in Rufus (**DD Image mode**). On first boot, Projects OS detects free space on the USB drive, creates and formats a `15 GB ext4` partition labeled `PROJECTS_PERSIST`, and mounts `/home/dev`, Wi-Fi credentials, and OS state persistently.
-- **Hardware Ready**: Pre-loaded with `linux-firmware`, `sof-firmware` (Samsung Galaxy Book 4 speakers/mic), Intel VA-API/Vulkan, AMD/Nouveau fallback graphics, Intel/Realtek Wi-Fi & Ethernet, Bluetooth, and Wayland portals.
-- **Minimalist Performance UI**: Solid matte theme (no wallpaper bloat), clean **Waybar** displaying CPU, RAM, Available Persistence Storage, Battery, and Network.
-- **Hidden System Monitor (`Super + S`)**: `btop` stays completely hidden until toggled with `Super + S`.
-- **Hide / Restore All Windows (`Super + D`)**: Works seamlessly in both Hyprland and Niri.
-- **Searchable Shortcuts (`Super + /`) & `~/SHORTCUTS.txt`**: Fuzzy-searchable shortcut overlay synced automatically with the Settings GUI.
-- **First-Boot Connectivity + Stack Wizard**: Connects to Wi-Fi/Ethernet and installs the latest **Java, Rust, Go, C/C++, Node.js, Python, Zig, Bun** via `mise`, automatically configuring **LazyVim** extras & LSPs.
-- **Project Reset Only**: After pushing a finished project to GitHub, click **Project Reset** to wipe `~/Projects`, language toolchains, and browser session caches while **keeping Wi-Fi profiles, SSH keys, Git config, and OS settings intact**.
-- **Curated Minimal Apps**: Minimal-UI Firefox, Neovim (LazyVim), Git, OpenSSH, LocalSend, OBS Studio, Foot terminal, Fuzzel launcher.
+- **Native C11 GTK4 Binaries (`os/src/`)**:
+  - `projects-wizard` — Compiled native x86_64 ELF binary for First-Boot Wi-Fi/Ethernet verification & project stack installation (`mise` + `pacman` + LazyVim extras).
+  - `projects-settings` — Compiled native x86_64 ELF binary using GLib `GKeyFile` for live matte themes, Hyprland/Niri hotkeys, OBS/LocalSend export paths, and Project Reset.
+- **Pure Shell + `jq` System Tooling (`os/archiso/airootfs/usr/local/bin/`)**:
+  - `projects-persist` — Auto-creates and mounts a 15 GB `ext4` partition (`PROJECTS_PERSIST`) in trailing USB free space on first boot (Rufus DD mode).
+  - `projects-apply-config` — Pure Bash config engine syncing `~/.config/projects-os/settings.conf` to Hyprland, Niri, Waybar, Foot, Fuzzel, OBS Studio, LocalSend, and `~/SHORTCUTS.txt`.
+  - `projects-reset` — Project Reset Only: wipes `~/Projects`, installed language toolchains, LazyVim extras, and Firefox session caches while preserving Wi-Fi profiles, SSH keys, Git config, and OS settings.
+  - `projects-toggle-sysmon`, `projects-toggle-hide-all`, `projects-shortcuts-menu`, `projects-waybar-storage`, `projects-firstboot-hook`.
+- **Up-to-Date Node 24 GitHub Actions**:
+  - `actions/checkout@v7`, `softprops/action-gh-release@v3`, `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`, `actions/deploy-pages@v5`.
 
 ---
 
@@ -24,16 +24,18 @@ A minimalist, high-performance portable Arch Linux live OS built for a **32 GB U
 ```text
 projects-os/
 ├── .github/workflows/
-│   ├── build-iso.yml          # Automated Archiso build + GitHub Release publisher
+│   ├── build-iso.yml          # Compiles C binaries + builds Archiso + publishes Release ISO
 │   └── deploy-website.yml     # Automated GitHub Pages deployment
 ├── os/
-│   ├── build.sh               # Archiso overlay builder script (used by CI)
+│   ├── build.sh               # Pure Bash CI build script (compiles os/src -> ELF, runs mkarchiso)
+│   ├── src/
+│   │   ├── Makefile           # Compiles stripped GTK4 C11 binaries
+│   │   ├── projects-wizard.c  # Native GTK4 First-Boot Connectivity & Stack Wizard
+│   │   └── projects-settings.c# Native GTK4 Settings GUI (Themes, Hotkeys, Export Paths, Reset)
 │   └── archiso/
-│       ├── profiledef.sh      # Archiso metadata & executable permissions
-│       ├── packages.x86_64    # Official Arch packages + drivers
-│       └── airootfs/          # Complete OS filesystem overlay
-│           ├── etc/           # greetd, systemd services, skel dotfiles
-│           └── usr/local/bin/ # Persistence, Wizard, Settings GUI, Reset, Shortcuts
+│       ├── profiledef.sh      # Archiso profile & permissions
+│       ├── packages.x86_64    # Official Arch packages (native GTK4 & shell tools only)
+│       └── airootfs/          # Pure shell tools, greetd, systemd units, skel dotfiles
 └── website/                   # Minimalist landing page & interactive preview
     ├── index.html
     ├── styles.css
@@ -42,28 +44,20 @@ projects-os/
 
 ---
 
-## Quick Start (No Linux Machine Required)
+## Quick Start (From Windows — No Linux Machine Needed)
 
-1. **Create a new GitHub repository** (e.g., `your-username/projects-os`) and push this folder to the `main` branch:
-   ```bash
+1. Push this folder to your GitHub repository's `main` branch:
+   ```powershell
    git init
    git add .
-   git commit -m "Initial Projects OS setup"
+   git commit -m "Projects OS (Zero-Python C + Shell)"
    git branch -M main
    git remote add origin https://github.com/<your-username>/projects-os.git
    git push -u origin main
    ```
-2. **Enable GitHub Permissions**:
-   - Go to **Settings → Actions → General → Workflow permissions** and select **Read and write permissions**.
-   - Go to **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**.
-3. **Wait for GitHub Actions (~8–12 min)**:
-   - `Build & Release Projects OS ISO` builds `projects-os-x86_64.iso` and publishes it on your **Releases** page.
-   - `Deploy Projects OS Website` publishes your landing page to `https://<your-username>.github.io/projects-os/`.
-4. **Flash with Rufus on Windows**:
-   - Download `projects-os-x86_64.iso` from your repository's **Releases** page.
-   - Open **Rufus**, select your **32 GB SanDisk USB drive**, choose `projects-os-x86_64.iso`, and click **START**.
-   - **Important**: When prompted, select **"Write in DD Image mode"** so the remaining ~24 GB stays unallocated for automatic 15 GB persistence setup.
-5. **Boot**:
-   - Plug into your Samsung Galaxy Book 4 (or any PC with Secure Boot disabled) and boot from USB.
-   - On first boot, `projects-persist` creates your 15 GB `PROJECTS_PERSIST` partition automatically.
-   - Log in (`dev` / password `projects`), pick **Hyprland** or **Niri**, connect to Wi-Fi in the First-Boot Wizard, and choose your project stack.
+2. Enable permissions in your GitHub repo:
+   - **Settings → Actions → General → Workflow permissions** → **Read and write permissions**.
+   - **Settings → Pages → Build and deployment → Source** → **GitHub Actions**.
+3. Wait for `Build & Release Projects OS ISO` (~8–12 min), then download `projects-os-x86_64.iso` from **Releases**.
+4. Flash onto your **32 GB SanDisk USB** using **Rufus** in **DD Image mode**.
+5. Boot with Secure Boot disabled. Login: `dev` / password `projects`. Press **F2** at login to switch between **Hyprland** and **Niri**.

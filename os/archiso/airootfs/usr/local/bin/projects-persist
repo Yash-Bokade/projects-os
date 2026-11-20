@@ -37,6 +37,7 @@ if [[ -z "$PART_DEV" ]]; then
 
       # Relocate GPT backup header if GPT hybrid ISO so trailing free space is visible
       sgdisk -e "$DISK_PATH" 2>/dev/null || true
+
       # Calculate free space after last partition (in MiB)
       FREE_MB=$(parted -sm "$DISK_PATH" unit MiB print free 2>/dev/null | awk -F: '$5 == "free;" {gsub("MiB","",$4); last=$4} END {printf "%d", last+0}')
       LAST_END_MB=$(parted -sm "$DISK_PATH" unit MiB print free 2>/dev/null | awk -F: '$5 == "free;" {gsub("MiB","",$2); last=$2} END {printf "%d", last+0}')
@@ -47,10 +48,8 @@ if [[ -z "$PART_DEV" ]]; then
         if (( FREE_MB < WANT_MB + 512 )); then
           WANT_MB=$(( FREE_MB - 256 ))
         fi
-        END_MB=$(( LAST_END_MB + WANT_MB ))
         echo "[projects-persist] Creating ${WANT_MB} MiB ext4 partition ($LABEL) on $DISK_PATH..."
 
-        # Create partition cleanly using sfdisk (works on MBR hybrid ISO drives flashed via Rufus DD)
         echo "${LAST_END_MB}M,${WANT_MB}M,L" | sfdisk --append --no-reread --force "$DISK_PATH" || true
         partprobe "$DISK_PATH" || true
         udevadm settle --timeout=10 || true
@@ -73,7 +72,6 @@ if [[ -n "$PART_DEV" && -b "$PART_DEV" ]]; then
   mkdir -p "$PERSIST_MNT"
   mount -o defaults,noatime,nodiratime "$PART_DEV" "$PERSIST_MNT"
 
-  # Initialize persistent tree if brand new
   mkdir -p "$PERSIST_MNT/home/dev"            "$PERSIST_MNT/etc/NetworkManager/system-connections"            "$PERSIST_MNT/var/lib/projects-os"
 
   if [[ ! -f "$PERSIST_MNT/home/dev/.projects-os-seeded" ]]; then

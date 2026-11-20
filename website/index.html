@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Projects OS — Portable Arch Linux for Developers</title>
-  <meta name="description" content="Minimalist portable Arch Linux OS for 32 GB flash drives with Hyprland + Niri, automatic 15 GB persistence, LazyVim, and one-click Project Reset." />
+  <title>Projects OS — Portable Arch Linux (Native C + Shell)</title>
+  <meta name="description" content="Zero-Python minimalist portable Arch Linux OS for 32 GB flash drives with native C GTK4 tools, Hyprland + Niri, automatic 15 GB persistence, LazyVim, and Project Reset." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -23,11 +23,11 @@
 
   <main>
     <section class="hero container">
-      <div class="pill">Arch Linux • Hyprland + Niri • 15 GB Auto-Persistence</div>
+      <div class="pill">Arch Linux • 0% Python (Native C + Shell) • Hyprland + Niri • 15 GB Auto-Persistence</div>
       <h1>Your entire dev machine on a <span class="accent">32 GB flash drive</span>.</h1>
       <p class="lead">
-        Boot anywhere seamlessly with hardware drivers pre-loaded, pick your language stack before the desktop opens,
-        and reset your workspace in one click when you ship to GitHub — without losing Wi-Fi, SSH keys, or settings.
+        Built exclusively with native compiled C11 GTK4 binaries and pure Shell scripts. Boot anywhere seamlessly,
+        pick your language stack before the desktop opens, and reset your project workspace in one click without losing Wi-Fi, SSH keys, or settings.
       </p>
       <div class="cta-row" id="download">
         <a id="iso-download-btn" href="https://github.com" class="btn btn-primary">Download Latest ISO</a>
@@ -38,15 +38,14 @@
       </div>
     </section>
 
-    <!-- INTERACTIVE SCREENSHOT / LIVE DESKTOP PREVIEW -->
     <section id="preview" class="container section">
       <div class="section-head">
         <h2>Interactive Desktop Preview</h2>
         <div class="preview-controls">
           <button class="chip active" data-view="hyprland">Hyprland</button>
           <button class="chip" data-view="niri">Niri Scrollable</button>
-          <button class="chip" data-view="wizard">First-Boot Wizard</button>
-          <button class="chip" data-view="settings">Settings GUI</button>
+          <button class="chip" data-view="wizard">First-Boot Wizard (C)</button>
+          <button class="chip" data-view="settings">Settings GUI (C)</button>
           <button class="chip accent-chip" id="toggle-sysmon-demo">Toggle Super + S Monitor</button>
         </div>
       </div>
@@ -60,8 +59,8 @@
             <span class="wb-mode" id="wb-mode-label">HYPRLAND</span>
           </div>
           <div class="wb-center">
-            <span class="wb-metric" id="wb-cpu">CPU 4%</span>
-            <span class="wb-metric" id="wb-ram">RAM 0.8/16.0G</span>
+            <span class="wb-metric" id="wb-cpu">CPU 3%</span>
+            <span class="wb-metric" id="wb-ram">RAM 0.7/16.0G</span>
             <span class="wb-metric">SSD 14G free</span>
           </div>
           <div class="wb-right">
@@ -71,33 +70,33 @@
           </div>
         </div>
 
-        <div class="desktop-canvas" id="desktop-canvas">
-          <!-- Populated & interactive via app.js -->
-        </div>
+        <div class="desktop-canvas" id="desktop-canvas"></div>
 
-        <!-- Hidden-by-default btop overlay toggled by Super + S -->
         <div class="sysmon-modal hidden" id="sysmon-modal">
           <div class="win-bar">
             <span>System Resources Monitor — btop (Super + S to hide)</span>
             <button id="close-sysmon">×</button>
           </div>
           <pre class="btop-mock">
-┌─ CPU (Intel Core Ultra / Galaxy Book 4) ─────────── 4.2% ─┐
-│ Core 0  [||                  ]  5%   Temp: 41°C           │
-│ Core 1  [|                   ]  3%   Freq: 2.1 GHz        │
-├─ MEMORY ────────────────────────── 0.84 GiB / 16.0 GiB ───┤
-│ Used    [██                  ]  5%   ZRAM: 0.0 GiB        │
-├─ PERSISTENCE (/persist - SanDisk 32GB) ── 14.1 GiB free ──┤
-│ /persist/home/dev   [█                   ] 0.9 / 15.0 GiB │
+┌─ CPU (Intel Core Ultra / Galaxy Book 4) ─────────── 3.1% ─┐
+│ Core 0  [|                   ]  4%   Temp: 39°C           │
+│ Core 1  [|                   ]  2%   Freq: 2.0 GHz        │
+├─ MEMORY ────────────────────────── 0.72 GiB / 16.0 GiB ───┤
+│ Used    [██                  ]  4%   ZRAM: 0.0 GiB        │
+├─ PERSISTENCE (/persist - SanDisk 32GB) ── 14.2 GiB free ──┤
+│ /persist/home/dev   [█                   ] 0.8 / 15.0 GiB │
 └───────────────────────────────────────────────────────────┘</pre>
         </div>
       </div>
     </section>
 
-    <!-- CORE FEATURES -->
     <section id="features" class="container section">
-      <h2>Engineered for Speed &amp; Portability</h2>
+      <h2>Engineered for Speed &amp; Zero Bloat</h2>
       <div class="grid-3">
+        <article class="card">
+          <h3>Zero Python — Native C &amp; Shell</h3>
+          <p>Both GUI apps compile to stripped x86_64 GTK4 ELF binaries via <code>gcc</code>, and all system hooks run in pure Bash + <code>jq</code> for instant startup.</p>
+        </article>
         <article class="card">
           <h3>Hyprland + Niri Switcher</h3>
           <p>Both Wayland compositors pre-installed and synced to your unified themes and hotkeys. Press <code>F2</code> at login to switch anytime.</p>
@@ -108,7 +107,7 @@
         </article>
         <article class="card">
           <h3>First-Boot Stack Wizard</h3>
-          <p>Connects Wi-Fi/Ethernet first, then installs latest Java, Rust, Go, C/C++, Node.js, or Python via <code>mise</code> and wires LSPs straight into LazyVim.</p>
+          <p>Connects Wi-Fi/Ethernet first, then installs latest Java, Rust, Go, C/C++, Node.js, or Zig via <code>mise</code> and wires LSPs straight into LazyVim.</p>
         </article>
         <article class="card">
           <h3>Project Reset Only</h3>
@@ -118,14 +117,9 @@
           <h3>Minimal Curated Apps</h3>
           <p>Minimal-UI Firefox, Neovim (LazyVim), Git, OpenSSH, LocalSend for instant LAN file sharing, and OBS Studio with Wayland hardware capture.</p>
         </article>
-        <article class="card">
-          <h3>Total GUI Customization</h3>
-          <p>Native GTK4 Settings app edits matte themes, live hotkeys for both compositors, OBS/LocalSend export paths, and generates <code>~/SHORTCUTS.txt</code>.</p>
-        </article>
       </div>
     </section>
 
-    <!-- SEARCHABLE SHORTCUTS -->
     <section id="shortcuts" class="container section">
       <div class="section-head">
         <h2>Keyboard Shortcuts</h2>
@@ -134,14 +128,13 @@
       <div class="shortcuts-table" id="shortcuts-list"></div>
     </section>
 
-    <!-- FLASHING & PERSISTENCE GUIDE -->
     <section id="flash" class="container section">
       <h2>3-Step Rufus Setup (32 GB USB)</h2>
       <div class="steps">
         <div class="step">
           <span class="step-num">01</span>
           <h4>Download Automated ISO</h4>
-          <p>Grab <code>projects-os-x86_64.iso</code> (~2.5 GB) built automatically by GitHub Actions on every push to <code>main</code>.</p>
+          <p>Grab <code>projects-os-x86_64.iso</code> built automatically by GitHub Actions on every push to <code>main</code>.</p>
         </div>
         <div class="step">
           <span class="step-num">02</span>
@@ -158,7 +151,7 @@
   </main>
 
   <footer class="footer container">
-    <span>Projects OS — Portable Minimalist Arch Linux</span>
+    <span>Projects OS — Pure C + Shell Portable Arch Linux</span>
     <span>Built automatically via GitHub Actions</span>
   </footer>
 

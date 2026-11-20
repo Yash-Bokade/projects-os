@@ -4,6 +4,6 @@ work/
 *.img
 *.zst
 *.sha256
-__pycache__/
-*.pyc
+os/src/projects-wizard
+os/src/projects-settings
 .DS_Store
