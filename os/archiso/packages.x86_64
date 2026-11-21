@@ -1,9 +1,6 @@
 # Base Arch Linux & Kernel
 base
-base-devel
 linux
-linux-headers
-linux-firmware
 mkinitcpio
 mkinitcpio-archiso
 syslinux
@@ -14,23 +11,30 @@ parted
 gptfdisk
 util-linux
 sudo
-zsh
 bash-completion
 zram-generator
 
-# Hardware Drivers (Samsung Galaxy Book 4 + Portable Universal Support)
+# Hardware Firmware (Samsung Galaxy Book 4 + Universal Laptop/Desktop Wi-Fi, ETH, BT, GPU)
+linux-firmware-intel
+linux-firmware-realtek
+linux-firmware-atheros
+linux-firmware-mediatek
+linux-firmware-broadcom
+linux-firmware-amdgpu
+linux-firmware-amd
+linux-firmware-other
 intel-ucode
 amd-ucode
+sof-firmware
+alsa-ucm-conf
+alsa-utils
+
+# Wayland Graphics & Hardware Acceleration
 mesa
 vulkan-intel
 vulkan-radeon
 intel-media-driver
 libva-intel-driver
-xf86-video-amdgpu
-xf86-video-nouveau
-sof-firmware
-alsa-ucm-conf
-alsa-utils
 brightnessctl
 upower
 power-profiles-daemon
@@ -72,7 +76,6 @@ hyprland
 niri
 xwayland-satellite
 xorg-xwayland
-qt5-wayland
 qt6-wayland
 
 # Minimal Desktop Shell & Utilities
@@ -99,7 +102,7 @@ tar
 # Fonts & Native GTK4 Runtime (Zero Python!)
 ttf-jetbrains-mono-nerd
 inter-font
-noto-fonts
+ttf-dejavu
 gtk3
 gtk4
 libayatana-appindicator

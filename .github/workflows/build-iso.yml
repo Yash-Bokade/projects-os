@@ -27,16 +27,36 @@ jobs:
       - name: Build Projects OS (Compile C Binaries + Archiso)
         run: |
           mkdir -p out
-          docker run --rm --privileged             -v "${{ github.workspace }}:/workspace"             -w /workspace             archlinux:latest             bash /workspace/os/build.sh
+          docker run --rm --privileged \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            archlinux:latest \
+            bash /workspace/os/build.sh
 
-      - name: Verify ISO and generate checksums
+      - name: Verify ISO size, checksums & handle GitHub 2 GiB asset limit
         run: |
           ls -lh out/
-          cd out
-          ISO_FILE=$(ls projects-os-*.iso | head -n 1)
-          mv "$ISO_FILE" projects-os-x86_64.iso
-          sha256sum projects-os-x86_64.iso > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          mkdir -p release-assets
+          ISO_FILE=$(ls out/projects-os-*.iso | head -n 1)
+          mv "$ISO_FILE" out/projects-os-x86_64.iso
+          (cd out && sha256sum projects-os-x86_64.iso > ../release-assets/SHA256SUMS.txt)
+          cat release-assets/SHA256SUMS.txt
+
+          ISO_BYTES=$(stat -c%s out/projects-os-x86_64.iso)
+          echo "Final ISO size: ${ISO_BYTES} bytes"
+
+          # GitHub Releases hard limit is 2,147,483,648 bytes (2 GiB) per asset.
+          # Upload single ISO directly if under 2 GiB; otherwise split cleanly into 1900 MiB parts.
+          if (( ISO_BYTES < 2147483648 )); then
+            mv out/projects-os-x86_64.iso release-assets/projects-os-x86_64.iso
+            echo "UPLOAD_MODE=single" >> "$GITHUB_ENV"
+          else
+            echo "ISO exceeds 2 GiB (${ISO_BYTES} bytes); splitting into 1900 MiB release parts..."
+            split -b 1900M -d -a 2 out/projects-os-x86_64.iso release-assets/projects-os-x86_64.iso.part
+            (cd release-assets && sha256sum projects-os-x86_64.iso.part* >> SHA256SUMS.txt)
+            echo "UPLOAD_MODE=split" >> "$GITHUB_ENV"
+          fi
+          ls -lh release-assets/
 
       - name: Create Release Tag & Publish ISO
         id: release
@@ -53,7 +73,7 @@ jobs:
             - **Auto 15 GB Persistence** on 32 GB USB drives flashed via Rufus (**DD Image mode**).
 
             ### Flash Instructions (Windows + Rufus)
-            1. Download `projects-os-x86_64.iso` below.
+            1. Download `projects-os-x86_64.iso` below (if split into `.part00`/`.part01`, run `copy /b projects-os-x86_64.iso.part* projects-os-x86_64.iso` in Command Prompt first).
             2. Open **Rufus**, select your **32 GB USB drive**, and choose `projects-os-x86_64.iso`.
             3. Click **START** and choose **Write in DD Image mode**.
             4. Boot from USB (Secure Boot disabled).
@@ -62,5 +82,4 @@ jobs:
             - **User**: `dev`
             - **Password**: `projects` (also `sudo` password)
           files: |
-            out/projects-os-x86_64.iso
-            out/SHA256SUMS.txt
+            release-assets/*
