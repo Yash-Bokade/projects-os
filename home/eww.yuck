@@ -1,0 +1,61 @@
+;; ---------- data ----------
+(defpoll hour     :interval "2s"    "date +%H")
+(defpoll minute   :interval "2s"    "date +%M")
+(defpoll weekday  :interval "60s"   "date +%A")
+(defpoll dateline :interval "60s"   "date '+%B %d, %Y'")
+(defpoll uptime   :interval "60s"   "uptime -p | sed 's/^up //'")
+(defpoll host     :interval "3600s" "hostname")
+
+;; ---------- widgets ----------
+(defwidget clock-card []
+  (box :class "clock" :orientation "v" :space-evenly false :halign "start"
+    (label :class "clock-h" :halign "start" :text hour)
+    (label :class "clock-m" :halign "start" :text minute)
+    (label :class "clock-day" :halign "start" :text weekday)
+    (label :class "clock-date" :halign "start" :text dateline)))
+
+(defwidget meter [label value]
+  (box :class "meter" :orientation "v" :space-evenly false
+    (box :orientation "h" :space-evenly false
+      (label :class "meter-label" :halign "start" :hexpand true :text label)
+      (label :class "meter-value" :halign "end" :text "${round(value, 0)}%"))
+    (scale :class "meter-bar" :min 0 :max 101 :value value :active false)))
+
+(defwidget system-card []
+  (box :class "card" :orientation "v" :space-evenly false :spacing 16
+    (label :class "card-title" :halign "start" :text "${host} / SYSTEM")
+    (meter :label "CPU"  :value {EWW_CPU.avg})
+    (meter :label "RAM"  :value {EWW_RAM.used_mem_perc})
+    (meter :label "ROOT" :value {EWW_DISK["/"].used_perc})
+    (meter :label "HOME" :value {EWW_DISK["/home"].used_perc})
+    (label :class "card-sub" :halign "start" :text "up ${uptime}")))
+
+;; ---------- windows ----------
+(defwindow clock
+  :geometry (geometry :x "56px" :y "56px" :anchor "top left")
+  :stacking "bg"
+  :exclusive false
+  :focusable "none"
+  (clock-card))
+
+(defwindow system
+  :geometry (geometry :x "56px" :y "56px" :anchor "top right")
+  :stacking "bg"
+  :exclusive false
+  :focusable "none"
+  (system-card))
+
+;; Full-screen screensaver: massive time + date, opened by swayidle after 5 minutes.
+(defwindow screensaver
+  :geometry (geometry :x "0%" :y "0%" :width "100%" :height "100%" :anchor "center")
+  :stacking "overlay"
+  :exclusive false
+  :focusable "none"
+  (box :class "ss" :orientation "v" :space-evenly false :hexpand true :vexpand true
+       :halign "fill" :valign "fill"
+    (box :orientation "v" :space-evenly false :halign "center" :valign "center" :vexpand true
+      (box :orientation "h" :space-evenly false :halign "center"
+        (label :class "ss-h" :text hour)
+        (label :class "ss-colon" :text ":")
+        (label :class "ss-m" :text minute))
+      (label :class "ss-date" :halign "center" :text "${weekday}  ·  ${dateline}"))))

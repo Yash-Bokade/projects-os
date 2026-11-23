@@ -1,219 +1,214 @@
-# nomad — a portable NixOS on a 28 GB stick
+# portable-nixos
 
-A pocket computer: the whole OS lives on one pendrive / SD card, boots on
-almost any x86-64 machine (BIOS **or** UEFI, nothing is installed on the
-host), and gives you a full desktop plus an offline Elixir dev
-environment. This repository is built by GitHub Actions into a bootable
-ISO — flash it and go.
+A complete NixOS 26.05 system that lives on a **pendrive or SD card** and boots on almost any UEFI PC.
+Flake + Home Manager, Wayland, **niri**, **ghostty**, **rofi**, **Zed**, **Rust**, **OBS**, a minimal Firefox,
+and an Omarchy-style mono theme with sharp corners, animations and a massive-clock screensaver.
 
-- **niri** (scrollable tiling Wayland) with a mono-gray theme and the single NixOS-blue accent `#5277C3`
-- **Ghostty** terminal (transparent), **Waybar**, **fuzzel** launcher
-- **OBS Studio**, PipeWire audio, screenshot tool
-- Device manager stack: GNOME Disks, `usbview`, `lshw`, `lspci`, `lsusb`
-- WiFi + Bluetooth from the tray applets (`nm-applet`, `blueman`) or `nmtui`
-- **Firefox** — slimmed with policies (no telemetry/pocket/studies, blank new tab, HTTPS-only)
-- **LocalSend** — drop files to/from phones and laptops on the same network
-- **Elixir first**: `mix` system-wide, `direnv` + `nix-direnv`, and `mkproj` — an `npm init`-style project creator
-- A **massive mono clock** as the lock screen / screensaver
-- `persist-setup` — one command that turns the stick's remaining ~20+ GB into persistent storage
+> Status: written without access to a Nix evaluator, so the first build may need a small fix
+> (a renamed option, a typo). Run the **check** workflow first: it evaluates both systems in a few minutes
+> and prints the exact file and line of any error.
 
-## Repository layout
+## How the drive is laid out
 
-```
-├── flake.nix                  identity (EDIT ME block) + inputs + ISO output
-├── shared.nix                 the OS: services, packages, network, user
-├── iso.nix                    the live image: boot, persistence, rescue
-├── home.nix                   per-user apps and dotfiles (home-manager)
-├── files/                     niri / ghostty / waybar / fuzzel / swaylock configs
-├── modules/mkproj.*           the `mkproj` command
-├── scripts/persist-setup.sh   enables persistence on the stick
-└── .github/workflows/build-iso.yml   builds the ISO on every push
-```
+| Partition | Label     | Size        | Mount   | What lives there |
+|-----------|-----------|-------------|---------|------------------|
+| 1         | `NIXBOOT` | 512 MiB     | `/boot` | GRUB, installed to the UEFI *fallback* path, so no host NVRAM is touched |
+| 2         | `NIXROOT` | 28 GiB      | `/`     | The OS and the Nix store (everything installed once, shared by all projects) |
+| 3         | `PERSIST` | rest (20 GiB+) | `/home` | Projects, dotfiles, Firefox profile, cargo cache, this repo |
 
-## 1. Get an ISO
+Needs a drive of **at least 50 GiB** (a 64 GB stick leaves roughly 30 GiB for `/home`).
+Partitions are mounted by *label*, so the stick works in any USB port or card reader.
+Reinstalling the OS never touches `PERSIST` unless you rerun `install.sh` (which wipes the whole device).
 
-### Via GitHub Actions (no local Nix needed)
+Flash-friendly choices: `noatime`, 60 s commit interval, journald in RAM, `/tmp` in RAM, zram swap,
+no Firefox disk cache, weekly garbage collection (generations older than 7 days), store hard-link optimisation.
 
-1. Create a GitHub repository and push this folder to it (`main` branch).
-   ```bash
-   git init -b main
-   git add -A
-   git commit -m "nomad — portable NixOS"
-   git remote add origin git@github.com:YOU/portable-nixos.git
-   git push -u origin main
-   ```
-2. Open the repo's **Actions** tab and watch **Build Portable NixOS ISO**
-   (it starts automatically on push; ~30–45 min). No secrets needed — the
-   build only pulls from `cache.nixos.org`.
-3. Download the artifact **portable-nixos-iso** (contains the `.iso` and
-   its `.sha256`).
-4. Optional releases: push a tag and the ISO is attached to a GitHub Release,
-   ```bash
-   git tag v1.0 && git push origin v1.0
-   ```
-   If the release step fails: repo **Settings → Actions → General →
-   Workflow permissions** must be "Read and write".
+## Prebuilt ISO (GitHub Actions + Releases)
 
-`flake.lock` is committed, so every build uses the exact same package
-versions until you run `nix flake update` and push again.
+There are two ways to get this OS on a stick:
 
-### Locally (if you have Nix)
+| | Live ISO (this section) | `scripts/install.sh` (below) |
+|---|---|---|
+| Built by | GitHub Actions, downloaded from Releases | you, on a machine with Nix |
+| `/home` (projects, settings) | persistent: auto-created partition | persistent: `PERSIST` partition |
+| Packages you add later | live in RAM, gone on reboot | permanent (real `/nix` on the stick) |
 
-```bash
-nix build .#iso        # -> result/iso/*.iso
+### Publishing a release
+
+1. Push this repo to GitHub (any name). Optionally run `nix flake lock` and commit `flake.lock` to pin versions.
+2. (Recommended) Open **Actions -> check -> Run workflow**. It only *evaluates* the config (a few minutes) and
+   reports typos or renamed options before you spend an hour building.
+3. Publish: `git tag v0.1.0 && git push origin v0.1.0`, or **Actions -> build-iso -> Run workflow** and type a tag.
+4. The `build-iso` workflow frees disk space on the runner, installs Nix, runs `nix build .#iso`
+   (zstd-19 squashfs to keep it small), splits the ISO into **1900 MiB parts** (`portable-nixos-<tag>.iso.001`, `.002`, ...,
+   under GitHub's 2 GiB limit), writes `SHA256SUMS` and join instructions, and creates the Release.
+
+### Using the release
+
+```sh
+# 1. download every .00N part and SHA256SUMS into one folder, then join:
+cat portable-nixos-v0.1.0.iso.0* > portable-nixos-v0.1.0.iso          # Linux / macOS
+# Windows cmd:  copy /b a.iso.001+a.iso.002+a.iso.003 a.iso   (or 7-Zip: Combine files)
+
+# 2. verify
+sha256sum -c --ignore-missing SHA256SUMS
+
+# 3. write it (replace /dev/sdX; balenaEtcher or Rufus in "DD Image" mode also work)
+sudo dd if=portable-nixos-v0.1.0.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-## 2. Flash the stick
+Use a stick **bigger than the image** (e.g. 64 GB). Do not use Ventoy; the image must be written directly.
 
-Wipes the stick completely — move anything valuable off it first.
+### Persistence on the live ISO
 
-- **balenaEtcher** (Linux/macOS/Windows): select the ISO, select the stick, flash.
-- **Rufus** (Windows): choose the ISO and pick **DD mode** when asked
-  (ISO mode will not boot).
-- **dd** (Linux/macOS):
-  ```bash
-  sudo dd if=portable-nixos-x86_64-linux.iso of=/dev/sdX bs=4M status=progress oflag=direct sync
-  ```
-  (`/dev/sdX` is the whole stick, not a partition.)
+`modules/system/persist-live.nix` runs a small service early in boot:
 
-Boot it from the machine's boot menu (`F12` / `ESC` / `F2` / `F8`,
-depending on vendor). **Secure Boot must be off** — the GRUB on the ISO
-is not signed. BIOS (legacy/CSM) and UEFI both work; nothing touches the
-host machine's disk or firmware.
+1. a partition labelled `PERSIST` exists -> mount it on `/home`;
+2. otherwise, if the stick has 2 GiB+ of unused space, create a `PERSIST` partition there, format ext4, mount it;
+3. otherwise (DVD, VM, read-only media) `/home` stays in RAM for that session.
 
-## 3. First boot
+So your projects (`~/Projects`), browser profile, cargo cache and dotfiles survive reboots. What does **not**
+survive on the live ISO is anything installed with Nix after boot (the system store is a RAM overlay); put what you
+need in `modules/system/packages.nix` and rebuild the ISO, or use `scripts/install.sh` for a fully writable system.
+Project dev shells reuse the packages baked into the ISO where possible.
 
-- Log in at the `tuigreet` prompt: user **`dev`**, password **`nomad`**.
-  (The password resets to this on every boot — a travel OS thing; the
-  stick itself is the thing to keep safe.)
-- Connect WiFi: click the tray applet, `Mod+Shift+N`, or run `nmtui`.
-- Press `Mod+Shift+/` anytime for the interactive hotkey overlay.
+## Install to a stick yourself (`scripts/install.sh`)
 
-Common keys (Mod = Super/Windows key):
+1. Boot any NixOS installer ISO (or a Linux with Nix), connect to the internet.
+2. Get this repo, edit `vars.nix` (user name, hostname, initial password) and `theme.nix` (colours) if you like.
+3. Run (replace `/dev/sdX` with the **pendrive**, check with `lsblk`):
 
-| Keys | Does |
-|---|---|
-| `Mod+T` | Ghostty terminal |
-| `Mod+D` | fuzzel launcher |
-| `Mod+B` | Firefox |
-| `Mod+O` | OBS Studio |
-| `Mod+Shift+S` | LocalSend |
-| `Mod+Shift+N` / `Mod+Shift+B` | WiFi / Bluetooth settings |
-| `Mod+Shift+D` | GNOME Disks (device manager) |
-| `Mod+Alt+L` | Lock screen — the big clock screensaver |
-| `Mod+Q` / `Mod+W` | close window / tabbed column |
-| `Mod+HJKL` / arrows | focus columns & windows |
-| `Mod+U` / `Mod+I` | scroll workspaces |
-| `Mod+1..9` | jump to workspace |
-| `Mod+R` / `Mod+F` | resize column / maximize |
-| `Mod+V` | float a window |
-| `Print` | screenshot (`Ctrl+Print` screen, `Alt+Print` window) |
-| `Mod+Shift+E` | log out |
-
-## 4. Persistence — the 20+ GB
-
-The live system runs from RAM: **nothing survives a reboot until you run
-this once.** In a terminal:
-
-```bash
-sudo persist-setup
+```sh
+sudo ./scripts/install.sh /dev/sdX        # 28 GiB OS partition
+sudo ./scripts/install.sh /dev/sdX 24     # or pick another OS size
 ```
 
-It finds the stick by itself (it only ever touches the stick that holds
-the ISO), shows the free space, and after you type `YES`:
+The script shows the device, makes you type its path to confirm, partitions, formats, runs
+`nixos-install --flake .#portable`, and copies the repo to `~/portable-nixos` on the stick.
+Boot from the drive via your firmware's boot menu, log in (initial password from `vars.nix`), run `passwd`.
 
-1. creates one btrfs partition labeled `persist` in the **unpartitioned
-   free space at the end of the stick** — the ISO is never modified,
-2. copies your current home onto it (projects, dotfiles, browser profile),
-3. seeds it with your WiFi passwords, Bluetooth pairings, machine-id and
-   the uid map,
-4. tells you to reboot.
+Change the system later: edit files in `~/portable-nixos`, then `rebuild` (alias for
+`sudo nixos-rebuild switch --flake ~/portable-nixos#portable`).
 
-After the reboot, `impermanence` binds `/home` and that state back into
-every boot. Verify with `ls /persist` and `df -h /home`. From then on:
-`mkproj` projects, browser logins, saved WiFi networks, LocalSend
-identity — all survive. Before setup, a `PERSISTENCE.txt` note in the
-home folder reminds you.
+## What is where
 
-**Space on a 28 GB stick** (really ~26.7 GiB): the ISO occupies
-~2.5–3 GB, leaving **~22+ GiB** for the persist partition — and btrfs
-zstd compression stretches projects even further.
-
-**What does NOT persist:** packages. The installed software is baked
-into the ISO; `nix build`/`nix profile` output and anything outside the
-persisted paths lives in RAM and resets on reboot. To change what is
-installed, edit this repo and let Actions build a new ISO.
-
-### Updating to a newer ISO
-
-Re-flashing a new ISO erases the persist partition — **back up first**:
-
-```bash
-# from the old boot, push your projects somewhere safe, e.g. via LocalSend
-# to your phone/another machine, or rsync to any USB disk:
-rsync -a ~/Projects /run/media/dev/<usb-disk>/
+```
+.github/workflows/
+  build-iso.yml           build ISO -> split in 1900 MiB parts -> GitHub Release
+  check.yml               evaluate-only sanity check (fast)
+flake.nix                 inputs (nixpkgs 26.05, home-manager 26.05), systems "portable" + "live", `.#iso`
+vars.nix                  user name, hostname, initial password
+theme.nix                 EVERY colour and the font. Change here, everything follows.
+hosts/common/home.nix     Home Manager glue shared by both systems
+hosts/portable/           the installed system (install.sh)
+hosts/live/               the live ISO (iso-image.nix, autologin, squashfs settings)
+modules/system/
+  kernel.nix              kernel, USB/SD initrd drivers, tmpfs, zram, volatile logs (shared)
+  boot.nix                GRUB removable-EFI (installed system only)
+  persist-live.nix        live ISO: create/mount persistent /home  (+ persist-setup.sh)
+  storage.nix             the three labelled partitions
+  hardware.nix            all firmware, microcode, graphics, udisks
+  nix.nix                 flakes, GC, store optimisation
+  network.nix             NetworkManager, Bluetooth, blueman, auto time zone
+  audio.nix               PipeWire
+  desktop.nix             niri, greetd login, portals (OBS capture), fonts
+  users.nix               your user, ~/Projects etc.
+  packages.nix            Rust toolchain, Nix tools, CLI + disk tools
+  slim.nix                drops docs and default packages to save space
+home/
+  niri.nix                niri config (KDL), keybinds, animations, borders
+  ghostty.nix             transparent terminal
+  rofi.nix                launcher theme
+  waybar.nix              minimal top bar
+  eww.nix + eww.yuck      wallpaper widgets and the screensaver
+  firefox.nix             minimal Firefox + uBlock Origin
+  zed.nix                 Zed editor
+  shell.nix               bash, starship prompt, git, direnv, yazi
+  apps.nix                OBS, notifications (mako), auto-mount (udiskie)
+  gtk.nix                 dark GTK theme and cursor
+  scripts.nix + scripts/  mkproj, devmgr, powermenu, desktop-start, screensaver-preview
+scripts/install.sh        partition + format + install onto the stick
 ```
 
-Then flash the new ISO, boot, run `sudo persist-setup` again (it recreates
-and re-seeds the persist partition). If you prefer to keep the partition:
-flash the ISO, boot once, and `persist-setup` will detect the existing
-`persist` label and leave it alone — but know that a fresh ISO may expect
-a newer config than old persisted files, so the backup route is the safe
-one.
+## The look
 
-## 5. `mkproj` — Elixir projects the npm way
+* **Wallpaper**: solid dark gray (`swaybg`), with **eww** widgets on the background layer: big hour in the
+  primary colour, minutes in the secondary colour, date, and a CPU / RAM / ROOT / HOME card.
+* **Primary colour** (amber by default) is the border of the active window, the rofi border, bar highlights.
+  **Secondary** (ember red) is for minutes, urgent state, errors. Edit both in `theme.nix`.
+* **Sharp corners** everywhere (`geometry-corner-radius 0`, `border-radius: 0` in every stylesheet).
+* **Animations**: niri springs for workspace / column movement, eased open / close.
+* **Terminal**: ghostty at 85 % opacity (`theme.opacity`).
+* **Screensaver**: after 5 minutes idle a full-screen overlay shows a 360 px time and the date;
+  any key or mouse movement dismisses it. After 15 minutes the screen powers off.
+  Preview it any time with `screensaver-preview`.
 
-```bash
-mkproj            # interactive: name, version, description, author,
-                  # email, license, keywords, elixir version, supervisor, git
-mkproj my_app     # same, name pre-filled
+## Keys (Mod = Super)
+
+| Keys | Action |
+|------|--------|
+| `Mod+Return` | ghostty |
+| `Mod+D` | rofi launcher |
+| `Mod+W` / `Mod+Z` / `Mod+Shift+O` | Firefox / Zed / OBS |
+| `Mod+E` | yazi file manager (floating) |
+| `Mod+N` | Wi-Fi settings (`nmtui`, floating) |
+| `Mod+B` | Bluetooth settings (`bluetui`, floating) |
+| `Mod+Shift+D` | **device manager** (mount, unmount, safely remove, PCI/USB info) |
+| `Mod+Q` | close window |
+| `Mod+H/J/K/L` or arrows | focus; add `Ctrl` to move |
+| `Mod+R`, `Mod+F`, `Mod+Shift+F`, `Mod+V` | cycle width, maximise column, fullscreen, float |
+| `Mod+1..5`, `Mod+Shift+1..5` | workspaces / move window to workspace |
+| `Mod+Tab` | overview |
+| `Print`, `Ctrl+Print`, `Alt+Print` | screenshot region / screen / window |
+| `Mod+Shift+Escape` | power menu |
+| `Mod+Shift+/` | full key list |
+
+Waybar: click **wifi** → `nmtui` (right-click: full GUI editor), click **bt** → `bluetui` (right-click: blueman),
+click **vol** → pavucontrol.
+
+## `mkproj`: create a project
+
+```sh
+mkproj            # asks for the name
+mkproj my-app     # name given
 ```
 
-It scaffolds with `mix new`, writes a `flake.nix` dev shell (elixir +
-elixir-ls, pinned or system Elixir), a `.envrc`, a README with every
-answer plus the creation date, runs `git init -b main` with a first
-commit, logs the project to `~/Projects/.projects.log`, and locks the dev
-shell with `nix flake lock`. Projects land in `~/Projects` (on the
-persist partition); `cd my_app` auto-enters the dev shell via direnv.
-The system's nixpkgs registry makes `nix develop` work offline.
+Like `npm init` it asks for **name, version, description, template, keywords, author, license, git remote**,
+prints a summary and asks "Is this OK?". Then it creates `~/Projects/<name>` (on the pendrive) with:
 
-## 6. Customize the OS
+* a template: `rust` (`cargo init`), `node` (`package.json`), `python` (`pyproject.toml`), `elixir` (`mix new`), or `generic`
+* `flake.nix` with a dev shell, `flake.lock`, `.envrc` (`use flake`, so the shell loads on `cd`)
+* `.gitignore`, `README.md`, `LICENSE` (MIT), `.project.json` (all your answers + creation date)
+* a git repo with an initial commit
 
-Everything is in the repo — edit, push, download the new ISO:
+Every project is also appended to `~/Projects/.registry.tsv` (date, name, template, path). List them with `projects`.
 
-- **Identity** (`dev`/`nomad`, timezone, locale): the `EDIT ME` block in `flake.nix`.
-- **System packages/services**: `shared.nix` (add e.g. `pkgs.vscode-fhs` to `environment.systemPackages`).
-- **User apps/dotfiles**: `home.nix`.
-- **Desktop look and keys**: `files/` — `niri.kdl` (bindings, gaps, colors), `ghostty.conf` (opacity), `waybar.json/css`, `fuzzel.ini`, `swaylock.conf` (the clock).
-- **What persists**: the directory list in `iso.nix` (`environment.persistence`).
+Why projects stay small: their flakes use `nixpkgs.url = "nixpkgs"`, which resolves to the exact nixpkgs
+this OS was built from, so dev shells reuse packages already in `/nix/store`. Nothing is downloaded twice.
 
-To try edits without a full ISO rebuild, clone your fork on the stick as
-`~/nomad` and run `rebuild` — the live system switches immediately
-(packages fetched this way still reset on reboot; they are in RAM).
+> I read "mix project" as "a new project", so there is a generic command plus an `elixir` template
+> (`mix new`). If you meant something else, edit `home/scripts/mkproj.sh`; it is plain bash.
+
+## Customising
+
+* Colours / font / terminal opacity: `theme.nix`
+* Packages for the whole machine: `modules/system/packages.nix`; per-user apps: `home/apps.nix`
+* Keybinds and animations: `home/niri.nix`
+* Screensaver delay: the `swayidle` line in `home/niri.nix` (seconds)
+* Widgets: `home/eww.yuck` (layout) and `home/eww.nix` (styling)
+
+## Notes and limits
+
+* **UEFI only.** Legacy BIOS boot would need an extra BIOS-boot partition and GRUB i386-pc.
+* **NVIDIA**: works with nouveau out of the box; proprietary drivers do not suit a portable image.
+* First run of Zed downloads its Nix/TOML extensions; uBlock Origin installs on Firefox's first online start.
+* Time zone is detected from your location (`automatic-timezoned`); remove that line in `network.nix` to disable.
+* Use the power menu or `poweroff` before unplugging, and `devmgr` → "unmount + power off" for *other* drives.
+* Free space: `nix-collect-garbage -d` and `df -h /`.
 
 ## Troubleshooting
 
-- **Stick does not appear in the boot menu** — try another USB port
-  (prefer USB2 ports on old machines), re-flash with DD mode (Rufus) or
-  Etcher, and make sure Secure Boot is off in the firmware setup.
-- **WiFi does not show networks** — firmware is included for most chips;
-  check `rfkill list`, or `sudo nmtui` in a terminal. Bluetooth pairs via
-  `blueman-manager` (`Mod+Shift+B`).
-- **`persist-setup` says "could not find the boot stick"** — pass the
-  device: `lsblk` to see it, then `sudo persist-setup /dev/sdX`.
-- **`persist-setup` refuses ("not the nomad stick")** — it only operates
-  on the disk containing the ISO; that is the safety check working.
-- **Forgot to set up persistence and lost work** — anything not under the
-  persisted paths is RAM-only; set up persistence before real work.
-- **The greeter says login failed** — user `dev`, password `nomad`,
-  exactly; caps lock is the usual culprit.
-- **A rebuild in Actions fails** — read the failing step's log; usually a
-  renamed package in nixpkgs after `nix flake update` (the error names the
-  option/package to adjust).
-
-## Ideas that fit naturally (not included)
-
-- Enable `services.tailscale.enable` in `shared.nix` for remote rescue.
-- Add `pkgs.elixir-ls` system-wide if you want LSP outside project shells.
-- Pin the ISO's nixpkgs to `nixos-25.11` instead of `nixos-unstable` for
-  a slower but calmer update cadence.
+* Black screen after login: switch to a TTY (`Ctrl+Alt+F2`), run `journalctl -b -u greetd` and `niri validate`.
+* Widgets missing: run `eww logs`; remember `desktop-start` runs once at login.
+* Eval error mentioning an option: the Nix message names the file and line; check the option in the
+  Home Manager / NixOS 26.05 manual and adjust.

@@ -1,82 +1,135 @@
-# ==========================================================================
-#  Builds the portable NixOS ISO on every push, saves it as a workflow
-#  artifact, and attaches it to a GitHub Release when you push a tag
-#  (git tag v1.0 && git push --tags).
+name: build-iso
+
+# Builds the live ISO, splits it into <2 GiB parts (GitHub's per-file release limit),
+# and publishes the parts + checksums as a GitHub Release.
 #
-#  The ISO also builds fine locally:  nix build .#iso
-# ==========================================================================
-name: Build Portable NixOS ISO
+#   * push a tag:      git tag v0.1.0 && git push origin v0.1.0
+#   * or run manually: Actions -> build-iso -> Run workflow (enter a tag name)
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main, master]
-    tags: ["v*"]
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create or update (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
 
 permissions:
-  contents: write # needed to attach the ISO to a Release
-
-concurrency:
-  group: build-iso-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   build:
-    name: Build ISO (x86_64-linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
-      - name: Checkout
+      - name: Check out
         uses: actions/checkout@v4
 
-      # the nix closure + squashfs work need more room than the runner
-      # has by default
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/lib/jvm || true
-          sudo docker image prune --force || true
-          df -h /
+      # The ISO build needs a lot of disk; a stock runner has too little free.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          docker-images: true
+          swap-storage: true
+          large-packages: false
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
-            accept-flake-config = true
+            max-jobs = auto
 
-      # optional: comment in and set your CACHIX_CACHE for much faster
-      # rebuilds after the first run
-      # - uses: cachix/cachix-action@v16
-      #   with:
-      #     name: your-cache
-      #     authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - name: Work out the release tag
+        id: tag
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Lock flake inputs (if flake.lock is not committed)
+        run: |
+          if [ ! -f flake.lock ]; then nix flake lock; fi
 
       - name: Build the ISO
+        run: nix build .#iso --print-build-logs --out-link result
+
+      - name: Split into release parts and write checksums
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          nix build .#iso --print-build-logs --fallback
-          ls -lh result/iso/
-          cp -v result/iso/*.iso portable-nixos-x86_64-linux.iso
-          sha256sum portable-nixos-x86_64-linux.iso > portable-nixos-x86_64-linux.iso.sha256
-          echo "### ISO ready" >> "$GITHUB_STEP_SUMMARY"
-          echo "- size: $(du -h portable-nixos-x86_64-linux.iso | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
-          cat portable-nixos-x86_64-linux.iso.sha256 >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          iso="$(ls result/iso/*.iso)"
+          name="portable-nixos-${TAG}.iso"
+          mkdir -p out
 
-      - name: Upload ISO artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: portable-nixos-iso
-          path: |
-            portable-nixos-x86_64-linux.iso
-            portable-nixos-x86_64-linux.iso.sha256
-          retention-days: 30
-          compression-level: 0 # the ISO is already compressed inside
+          # 1900 MiB < 2 GiB, the GitHub release asset limit.
+          split -b 1900M -d -a 3 --numeric-suffixes=1 "$iso" "out/${name}."
 
-      - name: Attach ISO to GitHub Release (only on v* tags)
-        if: startsWith(github.ref, 'refs/tags/v')
+          sha256sum "$iso" | awk -v n="$name" '{print $1 "  " n}' > out/SHA256SUMS
+          (cd out && sha256sum "${name}".0* >> SHA256SUMS)
+
+          ls -lh out
+          du -h "$iso"
+
+          {
+            echo "# portable-nixos ${TAG}"
+            echo
+            echo "Live ISO split into $(ls out/${name}.0* | wc -l) parts (GitHub limits release files to 2 GiB)."
+            echo
+            echo "## 1. Download every \`${name}.00N\` file and \`SHA256SUMS\`"
+            echo
+            echo "## 2. Join the parts"
+            echo
+            echo "Linux / macOS:"
+            echo '```sh'
+            echo "cat ${name}.0* > ${name}"
+            echo '```'
+            echo
+            echo "Windows (cmd), list the parts in order:"
+            echo '```bat'
+            printf 'copy /b '
+            ls out/${name}.0* | xargs -n1 basename | paste -sd+ | tr -d '\n'
+            echo " ${name}"
+            echo '```'
+            echo "Or with 7-Zip: right-click the first part -> 7-Zip -> Combine files."
+            echo
+            echo "## 3. Verify"
+            echo '```sh'
+            echo "sha256sum -c --ignore-missing SHA256SUMS   # Linux"
+            echo '```'
+            echo "Windows: \`certutil -hashfile ${name} SHA256\` and compare with the line in SHA256SUMS."
+            echo
+            echo "## 4. Write it to a USB stick or SD card"
+            echo "Use **dd**, balenaEtcher, or Rufus in **DD Image mode**. Do not use Ventoy: persistence needs the image written directly."
+            echo '```sh'
+            echo "sudo dd if=${name} of=/dev/sdX bs=4M status=progress conv=fsync   # replace /dev/sdX!"
+            echo '```'
+            echo
+            echo "## 5. Boot it"
+            echo "Pick the stick in your firmware's boot menu (UEFI). You are logged in automatically."
+            echo "On first boot, free space on the stick becomes the persistent \`/home\` (needs 2 GiB+ free, so use a stick larger than the image)."
+            echo "Initial password: see \`vars.nix\` (default \`portable\`)."
+          } > release-notes.md
+
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            portable-nixos-x86_64-linux.iso
-            portable-nixos-x86_64-linux.iso.sha256
-          generate_release_notes: true
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: portable-nixos ${{ steps.tag.outputs.tag }}
+          body_path: release-notes.md
+          files: out/*
+          fail_on_unmatched_files: true

@@ -1,9 +1,5 @@
-# nix build outputs
 result
 result-*
-*.iso
-*.iso.sha256
-# editor noise
-*.swp
-.idea/
-.vscode/
+*.qcow2
+*.img
+.direnv/

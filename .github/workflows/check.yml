@@ -1,0 +1,28 @@
+name: check
+
+# Cheap evaluation-only check (no build): catches typos and renamed options in minutes.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: Lock flake inputs (if flake.lock is not committed)
+        run: |
+          if [ ! -f flake.lock ]; then nix flake lock; fi
+      - name: Evaluate the live ISO
+        run: nix eval --raw .#nixosConfigurations.live.config.system.build.toplevel.drvPath
+      - name: Evaluate the installed system
+        run: nix eval --raw .#nixosConfigurations.portable.config.system.build.toplevel.drvPath
+      - name: Syntax-check shell scripts
+        run: |
+          for f in home/scripts/*.sh modules/system/*.sh scripts/*.sh; do bash -n "$f"; done
