@@ -1,7 +1,0 @@
-enable projects-persist.service
-enable NetworkManager.service
-enable bluetooth.service
-enable greetd.service
-enable power-profiles-daemon.service
-enable acpid.service
-disable systemd-networkd.service

@@ -1,63 +1,219 @@
-# Projects OS (Zero-Python — Pure C + Shell Edition)
+# nomad — a portable NixOS on a 28 GB stick
 
-A minimalist, ultra-fast portable Arch Linux live OS built for a **32 GB USB flash drive (27.25 GB usable)** with **zero Python runtime**, **native compiled C (GTK4) ELF binaries**, **pure Bash + `jq` system tooling**, automatic **15 GB persistence**, dual Wayland compositors (**Hyprland + Niri**), **LazyVim**, and one-click **Project Reset**.
+A pocket computer: the whole OS lives on one pendrive / SD card, boots on
+almost any x86-64 machine (BIOS **or** UEFI, nothing is installed on the
+host), and gives you a full desktop plus an offline Elixir dev
+environment. This repository is built by GitHub Actions into a bootable
+ISO — flash it and go.
 
----
+- **niri** (scrollable tiling Wayland) with a mono-gray theme and the single NixOS-blue accent `#5277C3`
+- **Ghostty** terminal (transparent), **Waybar**, **fuzzel** launcher
+- **OBS Studio**, PipeWire audio, screenshot tool
+- Device manager stack: GNOME Disks, `usbview`, `lshw`, `lspci`, `lsusb`
+- WiFi + Bluetooth from the tray applets (`nm-applet`, `blueman`) or `nmtui`
+- **Firefox** — slimmed with policies (no telemetry/pocket/studies, blank new tab, HTTPS-only)
+- **LocalSend** — drop files to/from phones and laptops on the same network
+- **Elixir first**: `mix` system-wide, `direnv` + `nix-direnv`, and `mkproj` — an `npm init`-style project creator
+- A **massive mono clock** as the lock screen / screensaver
+- `persist-setup` — one command that turns the stick's remaining ~20+ GB into persistent storage
 
-## Architecture Highlights (0% Python)
+## Repository layout
 
-- **Native C11 GTK4 Binaries (`os/src/`)**:
-  - `projects-wizard` — Compiled native x86_64 ELF binary for First-Boot Wi-Fi/Ethernet verification & project stack installation (`mise` + `pacman` + LazyVim extras).
-  - `projects-settings` — Compiled native x86_64 ELF binary using GLib `GKeyFile` for live matte themes, Hyprland/Niri hotkeys, OBS/LocalSend export paths, and Project Reset.
-- **Pure Shell + `jq` System Tooling (`os/archiso/airootfs/usr/local/bin/`)**:
-  - `projects-persist` — Auto-creates and mounts a 15 GB `ext4` partition (`PROJECTS_PERSIST`) in trailing USB free space on first boot (Rufus DD mode).
-  - `projects-apply-config` — Pure Bash config engine syncing `~/.config/projects-os/settings.conf` to Hyprland, Niri, Waybar, Foot, Fuzzel, OBS Studio, LocalSend, and `~/SHORTCUTS.txt`.
-  - `projects-reset` — Project Reset Only: wipes `~/Projects`, installed language toolchains, LazyVim extras, and Firefox session caches while preserving Wi-Fi profiles, SSH keys, Git config, and OS settings.
-  - `projects-toggle-sysmon`, `projects-toggle-hide-all`, `projects-shortcuts-menu`, `projects-waybar-storage`, `projects-firstboot-hook`.
-- **Up-to-Date Node 24 GitHub Actions**:
-  - `actions/checkout@v7`, `softprops/action-gh-release@v3`, `actions/configure-pages@v6`, `actions/upload-pages-artifact@v5`, `actions/deploy-pages@v5`.
-
----
-
-## Repository Structure
-
-```text
-projects-os/
-├── .github/workflows/
-│   ├── build-iso.yml          # Compiles C binaries + builds Archiso + publishes Release ISO
-│   └── deploy-website.yml     # Automated GitHub Pages deployment
-├── os/
-│   ├── build.sh               # Pure Bash CI build script (compiles os/src -> ELF, runs mkarchiso)
-│   ├── src/
-│   │   ├── Makefile           # Compiles stripped GTK4 C11 binaries
-│   │   ├── projects-wizard.c  # Native GTK4 First-Boot Connectivity & Stack Wizard
-│   │   └── projects-settings.c# Native GTK4 Settings GUI (Themes, Hotkeys, Export Paths, Reset)
-│   └── archiso/
-│       ├── profiledef.sh      # Archiso profile & permissions
-│       ├── packages.x86_64    # Official Arch packages (native GTK4 & shell tools only)
-│       └── airootfs/          # Pure shell tools, greetd, systemd units, skel dotfiles
-└── website/                   # Minimalist landing page & interactive preview
-    ├── index.html
-    ├── styles.css
-    └── app.js
+```
+├── flake.nix                  identity (EDIT ME block) + inputs + ISO output
+├── shared.nix                 the OS: services, packages, network, user
+├── iso.nix                    the live image: boot, persistence, rescue
+├── home.nix                   per-user apps and dotfiles (home-manager)
+├── files/                     niri / ghostty / waybar / fuzzel / swaylock configs
+├── modules/mkproj.*           the `mkproj` command
+├── scripts/persist-setup.sh   enables persistence on the stick
+└── .github/workflows/build-iso.yml   builds the ISO on every push
 ```
 
----
+## 1. Get an ISO
 
-## Quick Start (From Windows — No Linux Machine Needed)
+### Via GitHub Actions (no local Nix needed)
 
-1. Push this folder to your GitHub repository's `main` branch:
-   ```powershell
-   git init
-   git add .
-   git commit -m "Projects OS (Zero-Python C + Shell)"
-   git branch -M main
-   git remote add origin https://github.com/<your-username>/projects-os.git
+1. Create a GitHub repository and push this folder to it (`main` branch).
+   ```bash
+   git init -b main
+   git add -A
+   git commit -m "nomad — portable NixOS"
+   git remote add origin git@github.com:YOU/portable-nixos.git
    git push -u origin main
    ```
-2. Enable permissions in your GitHub repo:
-   - **Settings → Actions → General → Workflow permissions** → **Read and write permissions**.
-   - **Settings → Pages → Build and deployment → Source** → **GitHub Actions**.
-3. Wait for `Build & Release Projects OS ISO` (~8–12 min), then download `projects-os-x86_64.iso` from **Releases**.
-4. Flash onto your **32 GB SanDisk USB** using **Rufus** in **DD Image mode**.
-5. Boot with Secure Boot disabled. Login: `dev` / password `projects`. Press **F2** at login to switch between **Hyprland** and **Niri**.
+2. Open the repo's **Actions** tab and watch **Build Portable NixOS ISO**
+   (it starts automatically on push; ~30–45 min). No secrets needed — the
+   build only pulls from `cache.nixos.org`.
+3. Download the artifact **portable-nixos-iso** (contains the `.iso` and
+   its `.sha256`).
+4. Optional releases: push a tag and the ISO is attached to a GitHub Release,
+   ```bash
+   git tag v1.0 && git push origin v1.0
+   ```
+   If the release step fails: repo **Settings → Actions → General →
+   Workflow permissions** must be "Read and write".
+
+`flake.lock` is committed, so every build uses the exact same package
+versions until you run `nix flake update` and push again.
+
+### Locally (if you have Nix)
+
+```bash
+nix build .#iso        # -> result/iso/*.iso
+```
+
+## 2. Flash the stick
+
+Wipes the stick completely — move anything valuable off it first.
+
+- **balenaEtcher** (Linux/macOS/Windows): select the ISO, select the stick, flash.
+- **Rufus** (Windows): choose the ISO and pick **DD mode** when asked
+  (ISO mode will not boot).
+- **dd** (Linux/macOS):
+  ```bash
+  sudo dd if=portable-nixos-x86_64-linux.iso of=/dev/sdX bs=4M status=progress oflag=direct sync
+  ```
+  (`/dev/sdX` is the whole stick, not a partition.)
+
+Boot it from the machine's boot menu (`F12` / `ESC` / `F2` / `F8`,
+depending on vendor). **Secure Boot must be off** — the GRUB on the ISO
+is not signed. BIOS (legacy/CSM) and UEFI both work; nothing touches the
+host machine's disk or firmware.
+
+## 3. First boot
+
+- Log in at the `tuigreet` prompt: user **`dev`**, password **`nomad`**.
+  (The password resets to this on every boot — a travel OS thing; the
+  stick itself is the thing to keep safe.)
+- Connect WiFi: click the tray applet, `Mod+Shift+N`, or run `nmtui`.
+- Press `Mod+Shift+/` anytime for the interactive hotkey overlay.
+
+Common keys (Mod = Super/Windows key):
+
+| Keys | Does |
+|---|---|
+| `Mod+T` | Ghostty terminal |
+| `Mod+D` | fuzzel launcher |
+| `Mod+B` | Firefox |
+| `Mod+O` | OBS Studio |
+| `Mod+Shift+S` | LocalSend |
+| `Mod+Shift+N` / `Mod+Shift+B` | WiFi / Bluetooth settings |
+| `Mod+Shift+D` | GNOME Disks (device manager) |
+| `Mod+Alt+L` | Lock screen — the big clock screensaver |
+| `Mod+Q` / `Mod+W` | close window / tabbed column |
+| `Mod+HJKL` / arrows | focus columns & windows |
+| `Mod+U` / `Mod+I` | scroll workspaces |
+| `Mod+1..9` | jump to workspace |
+| `Mod+R` / `Mod+F` | resize column / maximize |
+| `Mod+V` | float a window |
+| `Print` | screenshot (`Ctrl+Print` screen, `Alt+Print` window) |
+| `Mod+Shift+E` | log out |
+
+## 4. Persistence — the 20+ GB
+
+The live system runs from RAM: **nothing survives a reboot until you run
+this once.** In a terminal:
+
+```bash
+sudo persist-setup
+```
+
+It finds the stick by itself (it only ever touches the stick that holds
+the ISO), shows the free space, and after you type `YES`:
+
+1. creates one btrfs partition labeled `persist` in the **unpartitioned
+   free space at the end of the stick** — the ISO is never modified,
+2. copies your current home onto it (projects, dotfiles, browser profile),
+3. seeds it with your WiFi passwords, Bluetooth pairings, machine-id and
+   the uid map,
+4. tells you to reboot.
+
+After the reboot, `impermanence` binds `/home` and that state back into
+every boot. Verify with `ls /persist` and `df -h /home`. From then on:
+`mkproj` projects, browser logins, saved WiFi networks, LocalSend
+identity — all survive. Before setup, a `PERSISTENCE.txt` note in the
+home folder reminds you.
+
+**Space on a 28 GB stick** (really ~26.7 GiB): the ISO occupies
+~2.5–3 GB, leaving **~22+ GiB** for the persist partition — and btrfs
+zstd compression stretches projects even further.
+
+**What does NOT persist:** packages. The installed software is baked
+into the ISO; `nix build`/`nix profile` output and anything outside the
+persisted paths lives in RAM and resets on reboot. To change what is
+installed, edit this repo and let Actions build a new ISO.
+
+### Updating to a newer ISO
+
+Re-flashing a new ISO erases the persist partition — **back up first**:
+
+```bash
+# from the old boot, push your projects somewhere safe, e.g. via LocalSend
+# to your phone/another machine, or rsync to any USB disk:
+rsync -a ~/Projects /run/media/dev/<usb-disk>/
+```
+
+Then flash the new ISO, boot, run `sudo persist-setup` again (it recreates
+and re-seeds the persist partition). If you prefer to keep the partition:
+flash the ISO, boot once, and `persist-setup` will detect the existing
+`persist` label and leave it alone — but know that a fresh ISO may expect
+a newer config than old persisted files, so the backup route is the safe
+one.
+
+## 5. `mkproj` — Elixir projects the npm way
+
+```bash
+mkproj            # interactive: name, version, description, author,
+                  # email, license, keywords, elixir version, supervisor, git
+mkproj my_app     # same, name pre-filled
+```
+
+It scaffolds with `mix new`, writes a `flake.nix` dev shell (elixir +
+elixir-ls, pinned or system Elixir), a `.envrc`, a README with every
+answer plus the creation date, runs `git init -b main` with a first
+commit, logs the project to `~/Projects/.projects.log`, and locks the dev
+shell with `nix flake lock`. Projects land in `~/Projects` (on the
+persist partition); `cd my_app` auto-enters the dev shell via direnv.
+The system's nixpkgs registry makes `nix develop` work offline.
+
+## 6. Customize the OS
+
+Everything is in the repo — edit, push, download the new ISO:
+
+- **Identity** (`dev`/`nomad`, timezone, locale): the `EDIT ME` block in `flake.nix`.
+- **System packages/services**: `shared.nix` (add e.g. `pkgs.vscode-fhs` to `environment.systemPackages`).
+- **User apps/dotfiles**: `home.nix`.
+- **Desktop look and keys**: `files/` — `niri.kdl` (bindings, gaps, colors), `ghostty.conf` (opacity), `waybar.json/css`, `fuzzel.ini`, `swaylock.conf` (the clock).
+- **What persists**: the directory list in `iso.nix` (`environment.persistence`).
+
+To try edits without a full ISO rebuild, clone your fork on the stick as
+`~/nomad` and run `rebuild` — the live system switches immediately
+(packages fetched this way still reset on reboot; they are in RAM).
+
+## Troubleshooting
+
+- **Stick does not appear in the boot menu** — try another USB port
+  (prefer USB2 ports on old machines), re-flash with DD mode (Rufus) or
+  Etcher, and make sure Secure Boot is off in the firmware setup.
+- **WiFi does not show networks** — firmware is included for most chips;
+  check `rfkill list`, or `sudo nmtui` in a terminal. Bluetooth pairs via
+  `blueman-manager` (`Mod+Shift+B`).
+- **`persist-setup` says "could not find the boot stick"** — pass the
+  device: `lsblk` to see it, then `sudo persist-setup /dev/sdX`.
+- **`persist-setup` refuses ("not the nomad stick")** — it only operates
+  on the disk containing the ISO; that is the safety check working.
+- **Forgot to set up persistence and lost work** — anything not under the
+  persisted paths is RAM-only; set up persistence before real work.
+- **The greeter says login failed** — user `dev`, password `nomad`,
+  exactly; caps lock is the usual culprit.
+- **A rebuild in Actions fails** — read the failing step's log; usually a
+  renamed package in nixpkgs after `nix flake update` (the error names the
+  option/package to adjust).
+
+## Ideas that fit naturally (not included)
+
+- Enable `services.tailscale.enable` in `shared.nix` for remote rescue.
+- Add `pkgs.elixir-ls` system-wide if you want LSP outside project shells.
+- Pin the ISO's nixpkgs to `nixos-25.11` instead of `nixos-unstable` for
+  a slower but calmer update cadence.

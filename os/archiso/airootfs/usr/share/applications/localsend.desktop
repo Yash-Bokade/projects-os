@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=LocalSend
-Comment=Share files with nearby devices over LAN
-Exec=/usr/local/bin/localsend
-Terminal=false
-Type=Application
-Categories=Network;FileTransfer;
-StartupWMClass=org.localsend.localsend_app

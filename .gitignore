@@ -1,9 +1,9 @@
-out/
-work/
+# nix build outputs
+result
+result-*
 *.iso
-*.img
-*.zst
-*.sha256
-os/src/projects-wizard
-os/src/projects-settings
-.DS_Store
+*.iso.sha256
+# editor noise
+*.swp
+.idea/
+.vscode/
